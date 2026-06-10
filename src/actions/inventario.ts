@@ -9,12 +9,11 @@ const InventarioSchema = z.object({
   nombre: z.string().min(1, 'Nombre requerido'),
   descripcion: z.string().optional(),
   categoria_id: z.string().uuid().optional().nullable(),
-  stock_actual: z.coerce.number().min(0),
-  stock_minimo: z.coerce.number().min(0),
-  unidad: z.string().default('unidad'),
-  costo_unitario: z.coerce.number().min(0),
+  stock_actual: z.number().min(0),
+  stock_minimo: z.number().min(0),
+  unidad: z.string().min(1).default('unidad'),
+  costo_unitario: z.number().min(0),
   proveedor: z.string().optional(),
-  activo: z.boolean().default(true),
 });
 
 const MovimientoSchema = z.object({
@@ -57,56 +56,41 @@ export async function getInventarioBajoStock(): Promise<Inventario[]> {
   return data ?? [];
 }
 
-export async function createInventario(prevState: unknown, formData: FormData) {
-  const result = InventarioSchema.safeParse({
-    nombre: formData.get('nombre'),
-    descripcion: formData.get('descripcion'),
-    categoria_id: formData.get('categoria_id') || null,
-    stock_actual: formData.get('stock_actual'),
-    stock_minimo: formData.get('stock_minimo'),
-    unidad: formData.get('unidad') || 'unidad',
-    costo_unitario: formData.get('costo_unitario'),
-    proveedor: formData.get('proveedor'),
-    activo: true,
-  });
+type InventarioInput = z.infer<typeof InventarioSchema>;
 
-  if (!result.success) {
-    return { error: result.error.issues[0].message };
-  }
+export async function createInventario(input: InventarioInput) {
+  const result = InventarioSchema.safeParse(input);
+  if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
-  const { error } = await supabase.from('inventario').insert(result.data);
+  const { data, error } = await supabase
+    .from('inventario')
+    .insert({ ...result.data, activo: true })
+    .select('*, categoria:categorias_inventario(*)')
+    .single();
 
-  if (error) return { error: 'Error al crear item' };
+  if (error) return { error: error.message };
 
   revalidatePath('/inventario');
-  return { success: 'Item creado' };
+  return { item: data as Inventario };
 }
 
-export async function updateInventario(id: string, prevState: unknown, formData: FormData) {
-  const result = InventarioSchema.safeParse({
-    nombre: formData.get('nombre'),
-    descripcion: formData.get('descripcion'),
-    categoria_id: formData.get('categoria_id') || null,
-    stock_actual: formData.get('stock_actual'),
-    stock_minimo: formData.get('stock_minimo'),
-    unidad: formData.get('unidad') || 'unidad',
-    costo_unitario: formData.get('costo_unitario'),
-    proveedor: formData.get('proveedor'),
-    activo: formData.get('activo') !== 'false',
-  });
-
-  if (!result.success) {
-    return { error: result.error.issues[0].message };
-  }
+export async function updateInventario(id: string, input: InventarioInput) {
+  const result = InventarioSchema.safeParse(input);
+  if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
-  const { error } = await supabase.from('inventario').update(result.data).eq('id', id);
+  const { data, error } = await supabase
+    .from('inventario')
+    .update(result.data)
+    .eq('id', id)
+    .select('*, categoria:categorias_inventario(*)')
+    .single();
 
-  if (error) return { error: 'Error al actualizar item' };
+  if (error) return { error: error.message };
 
   revalidatePath('/inventario');
-  return { success: 'Item actualizado' };
+  return { item: data as Inventario };
 }
 
 export async function registrarMovimiento(data: {

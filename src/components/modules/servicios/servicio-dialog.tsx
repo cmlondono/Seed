@@ -51,21 +51,23 @@ export function ServicioDialog({ open, servicio, onClose, onSaved }: Props) {
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
-    const fd = new FormData();
-    Object.entries(data).forEach(([k, v]) => fd.set(k, String(v)));
+    const input = {
+      nombre: data.nombre,
+      descripcion: data.descripcion || undefined,
+      duracion_minutos: data.duracion_minutos,
+      precio: data.precio,
+      activo: data.activo,
+    };
 
-    let result;
-    if (isEdit && servicio) {
-      result = await updateServicio(servicio.id, null, fd);
-    } else {
-      result = await createServicio(null, fd);
-    }
+    const result = isEdit && servicio
+      ? await updateServicio(servicio.id, input)
+      : await createServicio(input);
 
     setLoading(false);
     if (result.error) { toast.error(result.error); return; }
 
     toast.success(isEdit ? 'Servicio actualizado' : 'Servicio creado');
-    onSaved({ ...data, id: servicio?.id ?? crypto.randomUUID(), created_at: '', updated_at: '' } as Servicio);
+    onSaved(result.item!);
   };
 
   return (

@@ -46,55 +46,47 @@ export async function searchClientes(query: string): Promise<Cliente[]> {
   return data ?? [];
 }
 
-export async function createCliente(prevState: unknown, formData: FormData) {
-  const result = ClienteSchema.safeParse({
-    nombre: formData.get('nombre'),
-    apellido: formData.get('apellido'),
-    telefono: formData.get('telefono'),
-    email: formData.get('email') || undefined,
-    observaciones: formData.get('observaciones'),
-  });
+type ClienteInput = {
+  nombre: string;
+  apellido?: string;
+  telefono?: string;
+  email?: string;
+  observaciones?: string;
+};
 
-  if (!result.success) {
-    return { error: result.error.issues[0].message };
-  }
+export async function createCliente(input: ClienteInput) {
+  const result = ClienteSchema.safeParse(input);
+  if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('clientes')
-    .insert({ ...result.data, email: result.data.email || null })
+    .insert({ ...result.data, activo: true, email: result.data.email || null })
     .select()
     .single();
 
-  if (error) return { error: 'Error al crear cliente' };
+  if (error) return { error: error.message };
 
   revalidatePath('/clientes');
-  return { success: 'Cliente creado', data };
+  return { item: data as Cliente };
 }
 
-export async function updateCliente(id: string, prevState: unknown, formData: FormData) {
-  const result = ClienteSchema.safeParse({
-    nombre: formData.get('nombre'),
-    apellido: formData.get('apellido'),
-    telefono: formData.get('telefono'),
-    email: formData.get('email') || undefined,
-    observaciones: formData.get('observaciones'),
-  });
-
-  if (!result.success) {
-    return { error: result.error.issues[0].message };
-  }
+export async function updateCliente(id: string, input: ClienteInput) {
+  const result = ClienteSchema.safeParse(input);
+  if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('clientes')
     .update({ ...result.data, email: result.data.email || null })
-    .eq('id', id);
+    .eq('id', id)
+    .select()
+    .single();
 
-  if (error) return { error: 'Error al actualizar cliente' };
+  if (error) return { error: error.message };
 
   revalidatePath('/clientes');
-  return { success: 'Cliente actualizado' };
+  return { item: data as Cliente };
 }
 
 export async function deleteCliente(id: string) {

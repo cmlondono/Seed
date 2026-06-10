@@ -8,9 +8,9 @@ import type { Servicio } from '@/types';
 const ServicioSchema = z.object({
   nombre: z.string().min(1, 'Nombre requerido').max(100),
   descripcion: z.string().optional(),
-  duracion_minutos: z.coerce.number().int().min(5).max(480),
-  precio: z.coerce.number().min(0),
-  activo: z.boolean().default(true),
+  duracion_minutos: z.number().int().min(5).max(480),
+  precio: z.number().min(0),
+  activo: z.boolean(),
 });
 
 export async function getServicios(): Promise<Servicio[]> {
@@ -34,48 +34,47 @@ export async function getServicio(id: string): Promise<Servicio | null> {
   return data;
 }
 
-export async function createServicio(prevState: unknown, formData: FormData) {
-  const result = ServicioSchema.safeParse({
-    nombre: formData.get('nombre'),
-    descripcion: formData.get('descripcion'),
-    duracion_minutos: formData.get('duracion_minutos'),
-    precio: formData.get('precio'),
-    activo: formData.get('activo') === 'true',
-  });
+type ServicioInput = {
+  nombre: string;
+  descripcion?: string;
+  duracion_minutos: number;
+  precio: number;
+  activo: boolean;
+};
 
-  if (!result.success) {
-    return { error: result.error.issues[0].message };
-  }
+export async function createServicio(input: ServicioInput) {
+  const result = ServicioSchema.safeParse(input);
+  if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
-  const { error } = await supabase.from('servicios').insert(result.data);
+  const { data, error } = await supabase
+    .from('servicios')
+    .insert(result.data)
+    .select()
+    .single();
 
-  if (error) return { error: 'Error al crear servicio' };
+  if (error) return { error: error.message };
 
   revalidatePath('/servicios');
-  return { success: 'Servicio creado' };
+  return { item: data as Servicio };
 }
 
-export async function updateServicio(id: string, prevState: unknown, formData: FormData) {
-  const result = ServicioSchema.safeParse({
-    nombre: formData.get('nombre'),
-    descripcion: formData.get('descripcion'),
-    duracion_minutos: formData.get('duracion_minutos'),
-    precio: formData.get('precio'),
-    activo: formData.get('activo') === 'true',
-  });
-
-  if (!result.success) {
-    return { error: result.error.issues[0].message };
-  }
+export async function updateServicio(id: string, input: ServicioInput) {
+  const result = ServicioSchema.safeParse(input);
+  if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
-  const { error } = await supabase.from('servicios').update(result.data).eq('id', id);
+  const { data, error } = await supabase
+    .from('servicios')
+    .update(result.data)
+    .eq('id', id)
+    .select()
+    .single();
 
-  if (error) return { error: 'Error al actualizar servicio' };
+  if (error) return { error: error.message };
 
   revalidatePath('/servicios');
-  return { success: 'Servicio actualizado' };
+  return { item: data as Servicio };
 }
 
 export async function deleteServicio(id: string) {

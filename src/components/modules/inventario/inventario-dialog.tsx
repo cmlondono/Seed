@@ -60,21 +60,26 @@ export function InventarioDialog({ open, item, categorias, onClose, onSaved }: P
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
-    const fd = new FormData();
-    Object.entries(data).forEach(([k, v]) => fd.set(k, v !== undefined ? String(v) : ''));
+    const input = {
+      nombre: data.nombre,
+      descripcion: data.descripcion || undefined,
+      categoria_id: data.categoria_id || null,
+      stock_actual: data.stock_actual,
+      stock_minimo: data.stock_minimo,
+      unidad: data.unidad || 'unidad',
+      costo_unitario: data.costo_unitario,
+      proveedor: data.proveedor || undefined,
+    };
 
-    let result;
-    if (isEdit && item) {
-      result = await updateInventario(item.id, null, fd);
-    } else {
-      result = await createInventario(null, fd);
-    }
+    const result = isEdit && item
+      ? await updateInventario(item.id, input)
+      : await createInventario(input);
 
     setLoading(false);
     if (result.error) { toast.error(result.error); return; }
 
     toast.success(isEdit ? 'Item actualizado' : 'Item creado');
-    onSaved({ ...item, ...data, id: item?.id ?? crypto.randomUUID() } as Inventario);
+    onSaved(result.item!);
   };
 
   return (

@@ -12,7 +12,7 @@ const EmpleadoSchema = z.object({
   telefono: z.string().optional(),
   cargo: z.string().min(1, 'Cargo requerido'),
   color_calendario: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color inválido'),
-  activo: z.boolean().default(true),
+  activo: z.boolean(),
 });
 
 export async function getEmpleados(): Promise<Empleado[]> {
@@ -42,55 +42,52 @@ export async function getEmpleado(id: string): Promise<Empleado | null> {
   };
 }
 
-export async function createEmpleado(prevState: unknown, formData: FormData) {
-  const result = EmpleadoSchema.safeParse({
-    nombre: formData.get('nombre'),
-    apellido: formData.get('apellido'),
-    email: formData.get('email'),
-    telefono: formData.get('telefono'),
-    cargo: formData.get('cargo'),
-    color_calendario: formData.get('color_calendario') || '#3B82F6',
-    activo: formData.get('activo') !== 'false',
-  });
+type EmpleadoInput = {
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono?: string;
+  cargo: string;
+  color_calendario: string;
+  activo: boolean;
+};
 
-  if (!result.success) {
-    return { error: result.error.issues[0].message };
-  }
+export async function createEmpleado(input: EmpleadoInput) {
+  const result = EmpleadoSchema.safeParse(input);
+  if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
-  const { error } = await supabase.from('empleados').insert(result.data);
+  const { data, error } = await supabase
+    .from('empleados')
+    .insert(result.data)
+    .select()
+    .single();
 
   if (error) {
     if (error.code === '23505') return { error: 'Email ya registrado' };
-    return { error: 'Error al crear empleado' };
+    return { error: error.message };
   }
 
   revalidatePath('/empleados');
-  return { success: 'Empleado creado' };
+  return { item: data as Empleado };
 }
 
-export async function updateEmpleado(id: string, prevState: unknown, formData: FormData) {
-  const result = EmpleadoSchema.safeParse({
-    nombre: formData.get('nombre'),
-    apellido: formData.get('apellido'),
-    email: formData.get('email'),
-    telefono: formData.get('telefono'),
-    cargo: formData.get('cargo'),
-    color_calendario: formData.get('color_calendario') || '#3B82F6',
-    activo: formData.get('activo') !== 'false',
-  });
-
-  if (!result.success) {
-    return { error: result.error.issues[0].message };
-  }
+export async function updateEmpleado(id: string, input: EmpleadoInput) {
+  const result = EmpleadoSchema.safeParse(input);
+  if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
-  const { error } = await supabase.from('empleados').update(result.data).eq('id', id);
+  const { data, error } = await supabase
+    .from('empleados')
+    .update(result.data)
+    .eq('id', id)
+    .select()
+    .single();
 
-  if (error) return { error: 'Error al actualizar empleado' };
+  if (error) return { error: error.message };
 
   revalidatePath('/empleados');
-  return { success: 'Empleado actualizado' };
+  return { item: data as Empleado };
 }
 
 export async function deleteEmpleado(id: string) {

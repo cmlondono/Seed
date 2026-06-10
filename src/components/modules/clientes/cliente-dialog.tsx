@@ -56,22 +56,23 @@ export function ClienteDialog({ open, cliente, onClose, onSaved }: Props) {
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
-    const fd = new FormData();
-    Object.entries(data).forEach(([k, v]) => fd.set(k, v ?? ''));
+    const input = {
+      nombre: data.nombre,
+      apellido: data.apellido || undefined,
+      telefono: data.telefono || undefined,
+      email: data.email || undefined,
+      observaciones: data.observaciones || undefined,
+    };
 
-    let result;
-    if (isEdit && cliente) {
-      result = await updateCliente(cliente.id, null, fd);
-    } else {
-      result = await createCliente(null, fd);
-    }
+    const result = isEdit && cliente
+      ? await updateCliente(cliente.id, input)
+      : await createCliente(input);
 
     setLoading(false);
     if (result.error) { toast.error(result.error); return; }
 
     toast.success(isEdit ? 'Cliente actualizado' : 'Cliente creado');
-    const saved = (result as { data?: Cliente }).data ?? ({ ...data, id: cliente?.id ?? '' } as Cliente);
-    onSaved(saved);
+    onSaved(result.item!);
   };
 
   return (

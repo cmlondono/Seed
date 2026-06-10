@@ -94,19 +94,25 @@ export function EmpleadoDialog({ open, empleado, servicios, onClose, onSaved }: 
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
+    const input = {
+      nombre: data.nombre,
+      apellido: data.apellido,
+      email: data.email,
+      telefono: data.telefono || undefined,
+      cargo: data.cargo,
+      color_calendario: data.color_calendario || '#3B82F6',
+      activo: data.activo,
+    };
 
-    const formData = new FormData();
-    Object.entries(data).forEach(([k, v]) => formData.set(k, String(v)));
-
-    let result;
     let savedId: string;
+    let result;
 
     if (isEdit && empleado) {
-      result = await updateEmpleado(empleado.id, null, formData);
+      result = await updateEmpleado(empleado.id, input);
       savedId = empleado.id;
     } else {
-      result = await createEmpleado(null, formData);
-      savedId = (result as { data?: { id: string } }).data?.id ?? '';
+      result = await createEmpleado(input);
+      savedId = result.item?.id ?? '';
     }
 
     if (result.error) { setLoading(false); toast.error(result.error); return; }
