@@ -23,6 +23,7 @@ const schema = z.object({
   stock_minimo: z.number().min(0),
   unidad: z.string(),
   costo_unitario: z.number().min(0),
+  precio_venta: z.number().min(0),
   proveedor: z.string().optional(),
 });
 
@@ -42,7 +43,7 @@ export function InventarioDialog({ open, item, categorias, onClose, onSaved }: P
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { nombre: '', stock_actual: 0, stock_minimo: 0, unidad: 'unidad', costo_unitario: 0 },
+    defaultValues: { nombre: '', stock_actual: 0, stock_minimo: 0, unidad: 'unidad', costo_unitario: 0, precio_venta: 0 },
   });
 
   useEffect(() => {
@@ -51,10 +52,10 @@ export function InventarioDialog({ open, item, categorias, onClose, onSaved }: P
         nombre: item.nombre, descripcion: item.descripcion ?? '',
         categoria_id: item.categoria_id ?? '', stock_actual: item.stock_actual,
         stock_minimo: item.stock_minimo, unidad: item.unidad,
-        costo_unitario: item.costo_unitario, proveedor: item.proveedor ?? '',
+        costo_unitario: item.costo_unitario, precio_venta: item.precio_venta ?? 0, proveedor: item.proveedor ?? '',
       });
     } else {
-      form.reset({ nombre: '', stock_actual: 0, stock_minimo: 0, unidad: 'unidad', costo_unitario: 0 });
+      form.reset({ nombre: '', stock_actual: 0, stock_minimo: 0, unidad: 'unidad', costo_unitario: 0, precio_venta: 0 });
     }
   }, [item, open, form]);
 
@@ -68,6 +69,7 @@ export function InventarioDialog({ open, item, categorias, onClose, onSaved }: P
       stock_minimo: data.stock_minimo,
       unidad: data.unidad || 'unidad',
       costo_unitario: data.costo_unitario,
+      precio_venta: data.precio_venta,
       proveedor: data.proveedor || undefined,
     };
 
@@ -135,6 +137,11 @@ export function InventarioDialog({ open, item, categorias, onClose, onSaved }: P
               <Label className="text-xs">Costo unitario</Label>
               <Input type="number" min={0} className="h-8 text-sm" {...form.register('costo_unitario', { valueAsNumber: true })} />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Precio de venta</Label>
+            <Input type="number" min={0} step="0.01" className="h-8 text-sm" {...form.register('precio_venta', { valueAsNumber: true })} />
           </div>
 
           <div className="space-y-1.5">

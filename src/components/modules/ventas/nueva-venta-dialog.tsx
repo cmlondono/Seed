@@ -253,7 +253,9 @@ export function NuevaVentaDialog({ open, onClose, onCreated, empleados, clientes
                     </SelectTrigger>
                     <SelectContent>
                       {productos.filter((p) => p.activo).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.nombre} — {formatCurrency(p.precio)}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.nombre} — {formatCurrency(p.precio)} · Stock: {p.stock}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

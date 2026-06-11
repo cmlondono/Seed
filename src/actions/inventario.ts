@@ -13,6 +13,7 @@ const InventarioSchema = z.object({
   stock_minimo: z.number().min(0),
   unidad: z.string().min(1).default('unidad'),
   costo_unitario: z.number().min(0),
+  precio_venta: z.number().min(0).default(0),
   proveedor: z.string().optional(),
 });
 

@@ -157,6 +157,7 @@ export interface Inventario {
   stock_minimo: number;
   unidad: string;
   costo_unitario: number;
+  precio_venta: number;
   proveedor?: string;
   activo: boolean;
   created_at: string;
