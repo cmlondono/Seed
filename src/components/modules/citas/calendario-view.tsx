@@ -1,19 +1,43 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import listPlugin from '@fullcalendar/list';
-import esLocale from '@fullcalendar/core/locales/es';
-import type { EventClickArg, DateSelectArg } from '@fullcalendar/core';
+import 'temporal-polyfill/global';
+import { useEffect, useState } from 'react';
+import { useCalendarApp, ScheduleXCalendar } from '@schedule-x/react';
+import {
+  createViewWeek,
+  createViewDay,
+  createViewMonthGrid,
+  createViewMonthAgenda,
+} from '@schedule-x/calendar';
+import '@schedule-x/theme-default/dist/index.css';
 import { createClient } from '@/lib/supabase/client';
-import type { Cita, Empleado, Cliente, Servicio, CalendarEvent } from '@/types';
+import type { Cita, Empleado, Cliente, Servicio } from '@/types';
 import { CitaDetailDialog } from './cita-detail-dialog';
 import { NuevaCitaDialog } from './nueva-cita-dialog';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+
+const TZ = 'America/Bogota';
+
+function toZDT(fecha: string, hora: string) {
+  const h = hora.length > 5 ? hora.substring(0, 5) : hora;
+  return Temporal.ZonedDateTime.from(`${fecha}T${h}:00[${TZ}]`);
+}
+
+function citaToEvent(cita: Cita) {
+  return {
+    id: cita.id,
+    title: `${cita.cliente?.nombre ?? 'Sin cliente'} · ${cita.servicio?.nombre ?? ''}`,
+    start: toZDT(cita.fecha, cita.hora_inicio),
+    end: toZDT(cita.fecha, cita.hora_fin),
+    calendarId: cita.empleado_id,
+    _cita: cita,
+  };
+}
+
+function hexWithAlpha(hex: string, alpha: number) {
+  const a = Math.round(alpha * 255).toString(16).padStart(2, '0');
+  return hex + a;
+}
 
 interface Props {
   citas: Cita[];
@@ -27,57 +51,64 @@ export function CalendarioView({ citas: initialCitas, empleados, clientes, servi
   const [selectedCita, setSelectedCita] = useState<Cita | null>(null);
   const [newCitaDate, setNewCitaDate] = useState<string | null>(null);
   const [filtroEmpleado, setFiltroEmpleado] = useState<string>('all');
-  const [isMobile, setIsMobile] = useState(false);
-  const calendarRef = useRef<FullCalendar>(null);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
-  // Realtime subscription
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel('citas-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'citas' }, () => {
-        // Reload citas from server
-        fetch('/api/citas/realtime').then((r) => r.json()).then((data) => {
-          if (data.citas) setCitas(data.citas);
-        }).catch(() => {});
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
 
   const filteredCitas = filtroEmpleado === 'all'
     ? citas
     : citas.filter((c) => c.empleado_id === filtroEmpleado);
 
-  const events: CalendarEvent[] = filteredCitas.map((cita) => ({
-    id: cita.id,
-    title: `${cita.cliente?.nombre ?? ''} - ${cita.servicio?.nombre ?? ''}`,
-    start: `${cita.fecha}T${cita.hora_inicio}`,
-    end: `${cita.fecha}T${cita.hora_fin}`,
-    backgroundColor: cita.empleado?.color_calendario ?? '#3B82F6',
-    borderColor: cita.empleado?.color_calendario ?? '#3B82F6',
-    extendedProps: { cita },
-  }));
+  const calendarsConfig: Record<string, { colorName: string; lightColors: { main: string; container: string; onContainer: string } }> = {};
+  for (const emp of empleados.filter(e => e.activo)) {
+    const color = emp.color_calendario ?? '#3b82f6';
+    calendarsConfig[emp.id] = {
+      colorName: emp.id,
+      lightColors: {
+        main: color,
+        container: hexWithAlpha(color, 0.15),
+        onContainer: color,
+      },
+    };
+  }
 
-  const handleEventClick = useCallback((info: EventClickArg) => {
-    setSelectedCita((info.event.extendedProps as { cita: Cita }).cita);
-  }, []);
+  const calendar = useCalendarApp({
+    views: [createViewWeek(), createViewDay(), createViewMonthGrid(), createViewMonthAgenda()],
+    events: filteredCitas.map(citaToEvent),
+    locale: 'es-ES',
+    calendars: calendarsConfig,
+    defaultView: 'week',
+    isDark: true,
+    dayBoundaries: { start: '07:00', end: '21:00' },
+    weekOptions: { gridHeight: 650, gridStep: 30 },
+    callbacks: {
+      onEventClick(event) {
+        const cita = (event as Record<string, unknown>)._cita as Cita;
+        if (cita) setSelectedCita(cita);
+      },
+      onClickDateTime(dateTime) {
+        setNewCitaDate(dateTime.toPlainDate().toString());
+      },
+    },
+  });
 
-  const handleDateSelect = useCallback((info: DateSelectArg) => {
-    setNewCitaDate(info.startStr.split('T')[0]);
+  useEffect(() => {
+    if (!calendar) return;
+    calendar.events.set(filteredCitas.map(citaToEvent));
+  }, [citas, filtroEmpleado]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel('citas-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'citas' }, () => {
+        fetch('/api/citas/realtime').then(r => r.json()).then(data => {
+          if (data.citas) setCitas(data.citas);
+        }).catch(() => {});
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   return (
     <div className="space-y-4">
-      {/* Filtros por empleado */}
       <div className="flex flex-wrap gap-2">
         <Badge
           variant={filtroEmpleado === 'all' ? 'default' : 'outline'}
@@ -86,65 +117,34 @@ export function CalendarioView({ citas: initialCitas, empleados, clientes, servi
         >
           Todos
         </Badge>
-        {empleados.filter((e) => e.activo).map((emp) => (
+        {empleados.filter(e => e.activo).map(emp => (
           <Badge
             key={emp.id}
             variant={filtroEmpleado === emp.id ? 'default' : 'outline'}
             className="cursor-pointer gap-1.5"
-            style={filtroEmpleado === emp.id ? { backgroundColor: emp.color_calendario, borderColor: emp.color_calendario } : {}}
+            style={filtroEmpleado === emp.id
+              ? { backgroundColor: emp.color_calendario, borderColor: emp.color_calendario }
+              : {}}
             onClick={() => setFiltroEmpleado(emp.id)}
           >
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: emp.color_calendario }}
-            />
+            <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: emp.color_calendario }} />
             {emp.nombre} {emp.apellido}
           </Badge>
         ))}
       </div>
 
-      <Card className="border-0 shadow-sm overflow-hidden">
-        <div className="p-1">
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
-            headerToolbar={isMobile ? {
-              left: 'prev,next',
-              center: 'title',
-              right: 'listWeek,dayGridMonth',
-            } : {
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
-            }}
-            locale={esLocale}
-            initialView={isMobile ? 'listWeek' : 'timeGridWeek'}
-            events={events as never[]}
-            eventClick={handleEventClick}
-            selectable={!isMobile}
-            select={handleDateSelect}
-            height="auto"
-            slotMinTime="07:00:00"
-            slotMaxTime="21:00:00"
-            allDaySlot={false}
-            nowIndicator
-            businessHours={{ daysOfWeek: [1, 2, 3, 4, 5, 6], startTime: '08:00', endTime: '19:00' }}
-            eventContent={(info) => (
-              <div className="px-1 py-0.5 overflow-hidden">
-                <p className="text-xs font-medium truncate">{info.event.title}</p>
-                <p className="text-xs opacity-80">{info.timeText}</p>
-              </div>
-            )}
-            buttonText={{
-              today: 'Hoy',
-              month: 'Mes',
-              week: 'Semana',
-              day: 'Día',
-              list: 'Lista',
-            }}
-          />
-        </div>
-      </Card>
+      {/* CSS variables para colores de empleados — schedule-x los resuelve como --sx-color-{colorName}-container */}
+      <style dangerouslySetInnerHTML={{
+        __html: empleados.filter(e => e.activo && e.color_calendario).map(emp => {
+          const c = emp.color_calendario;
+          const cLight = hexWithAlpha(c, 0.15);
+          return `.sx__calendar-wrapper{--sx-color-${emp.id}:${c};--sx-color-${emp.id}-container:${cLight};--sx-color-on-${emp.id}-container:${c};}`;
+        }).join('')
+      }} />
+
+      <div className="sx-wrapper rounded-xl overflow-hidden border border-border shadow-sm">
+        <ScheduleXCalendar calendarApp={calendar} />
+      </div>
 
       {selectedCita && (
         <CitaDetailDialog
@@ -152,7 +152,11 @@ export function CalendarioView({ citas: initialCitas, empleados, clientes, servi
           open={!!selectedCita}
           onClose={() => setSelectedCita(null)}
           onUpdate={(updatedCita) => {
-            setCitas((prev) => prev.map((c) => c.id === updatedCita.id ? updatedCita : c));
+            setCitas(prev => prev.map(c => c.id === updatedCita.id ? updatedCita : c));
+            setSelectedCita(null);
+          }}
+          onDelete={(citaId) => {
+            setCitas(prev => prev.filter(c => c.id !== citaId));
             setSelectedCita(null);
           }}
         />
@@ -164,7 +168,7 @@ export function CalendarioView({ citas: initialCitas, empleados, clientes, servi
           defaultFecha={newCitaDate}
           onClose={() => setNewCitaDate(null)}
           onCreated={(cita) => {
-            setCitas((prev) => [...prev, cita]);
+            setCitas(prev => [...prev, cita]);
             setNewCitaDate(null);
           }}
           empleados={empleados}

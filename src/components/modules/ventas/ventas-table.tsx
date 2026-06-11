@@ -14,6 +14,7 @@ const METODO_LABELS: Record<string, string> = {
   transferencia: 'Transferencia',
   tarjeta: 'Tarjeta',
   mixto: 'Mixto',
+  credito: 'Crédito',
 };
 
 interface Props {

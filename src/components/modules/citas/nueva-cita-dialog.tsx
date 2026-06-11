@@ -52,18 +52,21 @@ export function NuevaCitaDialog({ open, defaultFecha, onClose, onCreated, emplea
     defaultValues: { fecha: defaultFecha ?? '', notas: '' },
   });
 
-  const watchEmpleado = form.watch('empleado_id');
-  const watchServicio = form.watch('servicio_id');
-  const watchFecha = form.watch('fecha');
+  const watchClienteId  = form.watch('cliente_id');
+  const watchEmpleadoId = form.watch('empleado_id');
+  const watchServicioId = form.watch('servicio_id');
+  const watchFecha      = form.watch('fecha');
+  const watchHora       = form.watch('hora_inicio');
 
-  const selectedServicio = servicios.find((s) => s.id === watchServicio);
+  const selectedCliente  = clientes.find(c => c.id === watchClienteId);
+  const selectedEmpleado = empleados.find(e => e.id === watchEmpleadoId);
+  const selectedServicio = servicios.find(s => s.id === watchServicioId);
 
   const loadSlots = async () => {
-    if (!watchEmpleado || !watchServicio || !watchFecha) return;
-    const servicio = servicios.find((s) => s.id === watchServicio);
-    if (!servicio) return;
+    if (!watchEmpleadoId || !watchServicioId || !watchFecha) return;
+    if (!selectedServicio) return;
     setLoadingSlots(true);
-    const available = await getDisponibilidadEmpleado(watchEmpleado, watchFecha, servicio.duracion_minutos);
+    const available = await getDisponibilidadEmpleado(watchEmpleadoId, watchFecha, selectedServicio.duracion_minutos);
     setSlots(available);
     setLoadingSlots(false);
   };
@@ -91,16 +94,24 @@ export function NuevaCitaDialog({ open, defaultFecha, onClose, onCreated, emplea
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {/* Cliente */}
           <div className="space-y-2">
             <Label>Cliente</Label>
-            <Select onValueChange={(v) => form.setValue('cliente_id', v as string)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar cliente" />
+            <Select
+              value={watchClienteId ?? ''}
+              onValueChange={(v) => { if (v) form.setValue('cliente_id', v); }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Seleccionar cliente">
+                  {selectedCliente
+                    ? `${selectedCliente.nombre} ${selectedCliente.apellido}${selectedCliente.telefono ? ` — ${selectedCliente.telefono}` : ''}`
+                    : ''}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {clientes.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.nombre} {c.apellido} {c.telefono ? `— ${c.telefono}` : ''}
+                    {c.nombre} {c.apellido}{c.telefono ? ` — ${c.telefono}` : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -111,14 +122,25 @@ export function NuevaCitaDialog({ open, defaultFecha, onClose, onCreated, emplea
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            {/* Empleado */}
             <div className="space-y-2">
               <Label>Empleado</Label>
-              <Select onValueChange={(v) => { form.setValue('empleado_id', v as string); form.setValue('hora_inicio', ''); setSlots([]); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Empleado" />
+              <Select
+                value={watchEmpleadoId ?? ''}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  form.setValue('empleado_id', v);
+                  form.setValue('hora_inicio', '');
+                  setSlots([]);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Empleado">
+                    {selectedEmpleado ? `${selectedEmpleado.nombre} ${selectedEmpleado.apellido}` : ''}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {empleados.filter((e) => e.activo).map((e) => (
+                  {empleados.filter(e => e.activo).map((e) => (
                     <SelectItem key={e.id} value={e.id}>
                       {e.nombre} {e.apellido}
                     </SelectItem>
@@ -127,14 +149,25 @@ export function NuevaCitaDialog({ open, defaultFecha, onClose, onCreated, emplea
               </Select>
             </div>
 
+            {/* Servicio */}
             <div className="space-y-2">
               <Label>Servicio</Label>
-              <Select onValueChange={(v) => { form.setValue('servicio_id', v as string); form.setValue('hora_inicio', ''); setSlots([]); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Servicio" />
+              <Select
+                value={watchServicioId ?? ''}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  form.setValue('servicio_id', v);
+                  form.setValue('hora_inicio', '');
+                  setSlots([]);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Servicio">
+                    {selectedServicio ? `${selectedServicio.nombre} (${selectedServicio.duracion_minutos}min)` : ''}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {servicios.filter((s) => s.activo).map((s) => (
+                  {servicios.filter(s => s.activo).map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.nombre} ({s.duracion_minutos}min — {formatCurrency(s.precio)})
                     </SelectItem>
@@ -144,17 +177,23 @@ export function NuevaCitaDialog({ open, defaultFecha, onClose, onCreated, emplea
             </div>
           </div>
 
+          {/* Fecha */}
           <div className="space-y-2">
             <Label>Fecha</Label>
             <Input
               type="date"
               min={new Date().toISOString().split('T')[0]}
               {...form.register('fecha')}
-              onChange={(e) => { form.setValue('fecha', e.target.value); setSlots([]); form.setValue('hora_inicio', ''); }}
+              onChange={(e) => {
+                form.setValue('fecha', e.target.value);
+                form.setValue('hora_inicio', '');
+                setSlots([]);
+              }}
             />
           </div>
 
-          {watchEmpleado && watchServicio && watchFecha && (
+          {/* Horarios disponibles */}
+          {watchEmpleadoId && watchServicioId && watchFecha && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Hora disponible</Label>
@@ -170,7 +209,7 @@ export function NuevaCitaDialog({ open, defaultFecha, onClose, onCreated, emplea
                       type="button"
                       onClick={() => form.setValue('hora_inicio', slot)}
                       className={`py-1.5 text-xs rounded border transition-colors ${
-                        form.watch('hora_inicio') === slot
+                        watchHora === slot
                           ? 'bg-primary text-primary-foreground border-primary'
                           : 'hover:bg-accent border-border'
                       }`}
@@ -179,7 +218,7 @@ export function NuevaCitaDialog({ open, defaultFecha, onClose, onCreated, emplea
                     </button>
                   ))}
                 </div>
-              ) : slots.length === 0 && !loadingSlots && (
+              ) : !loadingSlots && (
                 <p className="text-xs text-muted-foreground">Haz clic en &quot;Ver horarios&quot; para cargar disponibilidad</p>
               )}
               {form.formState.errors.hora_inicio && (

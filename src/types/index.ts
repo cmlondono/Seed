@@ -108,6 +108,7 @@ export interface Cliente {
   apellido?: string;
   telefono?: string;
   email?: string;
+  documento_identidad?: string;
   observaciones?: string;
   activo: boolean;
   fecha_registro: string;
@@ -231,6 +232,7 @@ export interface DetalleVenta {
   venta_id: string;
   tipo: TipoDetalleVenta;
   producto_id?: string;
+  inventario_id?: string;
   servicio_id?: string;
   descripcion: string;
   cantidad: number;
@@ -240,6 +242,7 @@ export interface DetalleVenta {
   created_at: string;
   // relations
   producto?: Producto;
+  inventario?: Inventario;
   servicio?: Servicio;
 }
 

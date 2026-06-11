@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
-import type { Inventario, MovimientoInventario, TipoMovimiento } from '@/types';
+import type { Inventario, MovimientoInventario, TipoMovimiento, Producto } from '@/types';
 
 const InventarioSchema = z.object({
   nombre: z.string().min(1, 'Nombre requerido'),
@@ -175,4 +175,27 @@ export async function getCategorias() {
   const supabase = await createClient();
   const { data } = await supabase.from('categorias_inventario').select('*').order('nombre');
   return data ?? [];
+}
+
+// Maps inventario items to the Producto shape used by the ventas module
+export async function getProductos(): Promise<Producto[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('inventario')
+    .select('*')
+    .eq('activo', true)
+    .order('nombre');
+
+  return (data ?? []).map((item) => ({
+    id: item.id,
+    nombre: item.nombre,
+    descripcion: item.descripcion ?? undefined,
+    precio: item.precio_venta > 0 ? item.precio_venta : item.costo_unitario,
+    costo: item.costo_unitario,
+    stock: item.stock_actual,
+    inventario_id: item.id,
+    activo: item.activo,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+  }));
 }

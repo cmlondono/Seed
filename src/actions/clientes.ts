@@ -10,6 +10,7 @@ const ClienteSchema = z.object({
   apellido: z.string().optional(),
   telefono: z.string().optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
+  documento_identidad: z.string().optional(),
   observaciones: z.string().optional(),
 });
 
@@ -40,7 +41,7 @@ export async function searchClientes(query: string): Promise<Cliente[]> {
   const { data } = await supabase
     .from('clientes')
     .select('*')
-    .or(`nombre.ilike.%${query}%,apellido.ilike.%${query}%,telefono.ilike.%${query}%,email.ilike.%${query}%`)
+    .or(`nombre.ilike.%${query}%,apellido.ilike.%${query}%,telefono.ilike.%${query}%,documento_identidad.ilike.%${query}%`)
     .eq('activo', true)
     .limit(10);
   return data ?? [];
@@ -51,6 +52,7 @@ type ClienteInput = {
   apellido?: string;
   telefono?: string;
   email?: string;
+  documento_identidad?: string;
   observaciones?: string;
 };
 

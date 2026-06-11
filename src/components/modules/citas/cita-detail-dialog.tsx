@@ -27,9 +27,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onUpdate: (cita: Cita) => void;
+  onDelete?: (citaId: string) => void;
 }
 
-export function CitaDetailDialog({ cita, open, onClose, onUpdate }: Props) {
+export function CitaDetailDialog({ cita, open, onClose, onUpdate, onDelete }: Props) {
   const [loading, setLoading] = useState(false);
 
   const handleEstadoChange = async (estado: EstadoCita) => {
@@ -53,6 +54,7 @@ export function CitaDetailDialog({ cita, open, onClose, onUpdate }: Props) {
       return;
     }
     toast.success('Cita eliminada');
+    onDelete?.(cita.id);
     onClose();
   };
 

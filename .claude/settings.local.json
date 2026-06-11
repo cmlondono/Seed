@@ -6,7 +6,28 @@
       "Bash(node -e \"const p = require\\('./node_modules/next/package.json'\\); console.log\\(p.version\\)\")",
       "Bash(npm install *)",
       "Bash(Test-Path *)",
-      "Bash(New-Item *)"
+      "Bash(New-Item *)",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\cmlon\\\\OneDrive\\\\Desktop\\\\ProyectosP\\\\app\\\\src\\\\types\")",
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\cmlon\\\\OneDrive\\\\Desktop\\\\ProyectosP\\\\app\\\\src\\\\lib\")",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\cmlon\\\\OneDrive\\\\Desktop\\\\ProyectosP\\\\app\\\\src\\\\hooks\")",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\cmlon\\\\OneDrive\\\\Desktop\\\\ProyectosP\\\\app\\\\src\\\\database\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); const keys=Object.keys\\({...p.dependencies,...p.devDependencies}\\).filter\\(k=>k.includes\\('calendar'\\)||k.includes\\('fullcalendar'\\)||k.includes\\('schedule'\\)||k.includes\\('big-cal'\\)\\); console.log\\(keys\\)\")",
+      "Bash(npm info *)",
+      "Bash(npm pack *)",
+      "Bash(npm search *)",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); try{const a=JSON.parse\\(d\\); console.log\\(a.map\\(p=>p.name\\).join\\('\\\\n'\\)\\)}catch\\(e\\){console.log\\(d.substring\\(0,500\\)\\)}\")",
+      "Bash(node -e \"process.stdin.setEncoding\\('utf8'\\); let d=''; process.stdin.on\\('data',c=>d+=c\\); process.stdin.on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\); console.log\\('exports:', JSON.stringify\\(Object.keys\\(j.exports||{}\\)\\).substring\\(0,300\\)\\); console.log\\('keywords:', j.keywords?.join\\(', '\\)\\); console.log\\('description:', j.description\\)}catch\\(e\\){console.log\\(d.substring\\(0,400\\)\\)}}\\)\")",
+      "Bash(node -e \"process.stdin.setEncoding\\('utf8'\\); let d=''; process.stdin.on\\('data',c=>d+=c\\); process.stdin.on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\); console.log\\(JSON.stringify\\(j.dependencies, null, 2\\)\\)}catch\\(e\\){}}\\)\")",
+      "Bash(node -e \"process.stdin.setEncoding\\('utf8'\\); let d=''; process.stdin.on\\('data',c=>d+=c\\); process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\); console.log\\('main:', j.main, '\\\\nexports:', JSON.stringify\\(j.exports,null,2\\).substring\\(0,500\\)\\)}\\)\")",
+      "Bash(findstr /C:\"exports\" /C:\"main\" /C:\"global\")",
+      "Bash(grep -n \"config\\\\$5\\\\|config\\\\$4\\\\|config\\\\$3\\\\|config\\\\$2\\\\|viewWeek\\\\b\\\\|viewDay\\\\b\\\\|viewMonthGrid\\\\b\\\\|name.*week\\\\|name.*day\\\\|name.*month\" \"C:\\\\Users\\\\cmlon\\\\OneDrive\\\\Desktop\\\\ProyectosP\\\\app\\\\node_modules\\\\@schedule-x\\\\calendar\\\\dist\\\\core.js\")",
+      "Bash(npm uninstall *)",
+      "Bash(npx vitest *)",
+      "Bash(Remove-Item -Recurse -Force \"src\\\\__tests__\")",
+      "Bash(Remove-Item -Recurse -Force \"e2e\")",
+      "Bash(Remove-Item -Force \"vitest.config.ts\")",
+      "Bash(Remove-Item -Force \"playwright.config.ts\")"
     ]
   }
 }

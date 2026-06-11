@@ -6,6 +6,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
   const inicio = format(startOfMonth(new Date()), 'yyyy-MM-dd');
   const fin = format(endOfMonth(new Date()), 'yyyy-MM-dd');
 

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth';
 import { z } from 'zod';
 import type { Configuracion } from '@/types';
 
@@ -27,7 +28,8 @@ export async function getConfiguracion(): Promise<Configuracion | null> {
   return data;
 }
 
-export async function updateConfiguracion(prevState: unknown, formData: FormData) {
+export async function updateConfiguracion(prevState: unknown, formData: FormData): Promise<{ error?: string; success?: string }> {
+  await requireAdmin();
   const result = ConfigSchema.safeParse({
     nombre_negocio: formData.get('nombre_negocio'),
     telefono: formData.get('telefono'),

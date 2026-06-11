@@ -37,9 +37,9 @@ export function VentasClient({ ventas: initialVentas, empleados, clientes, servi
       <NuevaVentaDialog
         open={openNueva}
         onClose={() => setOpenNueva(false)}
-        onCreated={(venta) => {
+        onCreated={(venta, keepOpen) => {
           setVentas((prev) => [venta, ...prev]);
-          setOpenNueva(false);
+          if (!keepOpen) setOpenNueva(false);
         }}
         empleados={empleados}
         clientes={clientes}

@@ -1,16 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { createVenta } from '@/actions/ventas';
 import { createCredito } from '@/actions/creditos';
+import { searchClientes } from '@/actions/clientes';
 import type { Empleado, Cliente, Servicio, Producto, Venta } from '@/types';
 import { format, addMonths } from 'date-fns';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,33 +16,31 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { formatCurrency } from '@/lib/utils';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart } from 'lucide-react';
 
-const detalleSchema = z.object({
-  tipo: z.enum(['producto', 'servicio']),
-  producto_id: z.string().optional().nullable(),
-  servicio_id: z.string().optional().nullable(),
-  descripcion: z.string().min(1),
-  cantidad: z.number().positive(),
-  precio_unitario: z.number().min(0),
-  descuento: z.number().min(0),
-});
+interface CartItem {
+  tipo: 'servicio' | 'producto';
+  ref_id: string;
+  descripcion: string;
+  precio_unitario: number;
+  cantidad: number;
+  descuento: number;
+}
 
-const schema = z.object({
-  empleado_id: z.string().uuid('Selecciona empleado'),
-  cliente_id: z.string().optional().nullable(),
-  metodo_pago: z.enum(['efectivo', 'transferencia', 'tarjeta', 'mixto', 'credito']),
-  descuento: z.number().min(0),
-  notas: z.string().optional(),
-  detalles: z.array(detalleSchema).min(1, 'Agrega al menos un item'),
-});
+type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'mixto' | 'credito';
 
-type FormData = z.infer<typeof schema>;
+const METODOS: { value: MetodoPago; label: string }[] = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'tarjeta', label: 'Tarjeta' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'mixto', label: 'Mixto' },
+  { value: 'credito', label: 'Crédito' },
+];
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreated: (venta: Venta) => void;
+  onCreated: (venta: Venta, keepOpen?: boolean) => void;
   empleados: Empleado[];
   clientes: Cliente[];
   servicios: Servicio[];
@@ -53,72 +49,131 @@ interface Props {
 
 export function NuevaVentaDialog({ open, onClose, onCreated, empleados, clientes, servicios, productos }: Props) {
   const [loading, setLoading] = useState(false);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [empleadoId, setEmpleadoId] = useState('');
+  const [clienteId, setClienteId] = useState<string | null>(null);
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo');
+  const [descuento, setDescuento] = useState(0);
   const [numCuotas, setNumCuotas] = useState(3);
   const [fechaPrimeraCuota, setFechaPrimeraCuota] = useState('');
+
+  // Client combobox
+  const [clienteQuery, setClienteQuery] = useState('');
+  const [clienteSugerencias, setClienteSugerencias] = useState<Cliente[]>([]);
+  const [showSugerencias, setShowSugerencias] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const comboboxRef = useRef<HTMLDivElement>(null);
+
+  // Remember last empleado across sales
+  const lastEmpleadoRef = useRef('');
 
   useEffect(() => {
     setFechaPrimeraCuota(format(addMonths(new Date(), 1), 'yyyy-MM-dd'));
   }, []);
 
-  const form = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      metodo_pago: 'efectivo',
-      descuento: 0,
-      detalles: [],
-    },
-  });
+  // Reset cart on open, restore last empleado
+  useEffect(() => {
+    if (open) {
+      setCart([]);
+      setClienteId(null);
+      setClienteQuery('');
+      setMetodoPago('efectivo');
+      setDescuento(0);
+      if (lastEmpleadoRef.current) setEmpleadoId(lastEmpleadoRef.current);
+    }
+  }, [open]);
 
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: 'detalles' });
+  // Close combobox on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (comboboxRef.current && !comboboxRef.current.contains(e.target as Node)) {
+        setShowSugerencias(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
-  const detalles = form.watch('detalles');
-  const descuento = form.watch('descuento') || 0;
+  // Cart helpers
+  const addToCart = (tipo: 'servicio' | 'producto', ref_id: string, descripcion: string, precio: number) => {
+    setCart((prev) => {
+      const idx = prev.findIndex((c) => c.ref_id === ref_id && c.tipo === tipo);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
+        return next;
+      }
+      return [...prev, { tipo, ref_id, descripcion, precio_unitario: precio, cantidad: 1, descuento: 0 }];
+    });
+  };
 
-  const subtotal = detalles.reduce((s, d) => s + ((d.precio_unitario || 0) * (d.cantidad || 1) - (d.descuento || 0)), 0);
+  const updateQty = (index: number, delta: number) => {
+    setCart((prev) => {
+      const next = [...prev];
+      const newQty = next[index].cantidad + delta;
+      if (newQty <= 0) { next.splice(index, 1); } else { next[index] = { ...next[index], cantidad: newQty }; }
+      return next;
+    });
+  };
+
+  const removeFromCart = (index: number) => setCart((prev) => prev.filter((_, i) => i !== index));
+
+  // Totals
+  const subtotal = cart.reduce((s, c) => s + c.precio_unitario * c.cantidad - c.descuento, 0);
   const total = Math.max(0, subtotal - descuento);
+  const montoCuota = metodoPago === 'credito' && numCuotas > 0 ? parseFloat((total / numCuotas).toFixed(2)) : 0;
 
-  const addServicio = () => {
-    append({ tipo: 'servicio', servicio_id: null, producto_id: null, descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0 });
+  // Client search
+  const handleClienteQuery = (q: string) => {
+    setClienteQuery(q);
+    setClienteId(null);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!q.trim()) { setClienteSugerencias([]); setShowSugerencias(false); return; }
+    const local = clientes.filter((c) =>
+      `${c.nombre} ${c.apellido ?? ''} ${c.documento_identidad ?? ''} ${c.telefono ?? ''}`.toLowerCase().includes(q.toLowerCase())
+    ).slice(0, 8);
+    setClienteSugerencias(local);
+    setShowSugerencias(true);
+    searchTimeout.current = setTimeout(async () => {
+      const remote = await searchClientes(q);
+      setClienteSugerencias(remote);
+    }, 300);
   };
 
-  const addProducto = () => {
-    append({ tipo: 'producto', producto_id: null, servicio_id: null, descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0 });
+  const selectCliente = (c: Cliente) => {
+    setClienteId(c.id);
+    setClienteQuery(`${c.nombre}${c.apellido ? ` ${c.apellido}` : ''}${c.documento_identidad ? ` · ${c.documento_identidad}` : ''}`);
+    setShowSugerencias(false);
   };
 
-  const handleServicioSelect = (index: number, id: string) => {
-    const s = servicios.find((sv) => sv.id === id);
-    if (s) {
-      form.setValue(`detalles.${index}.descripcion`, s.nombre);
-      form.setValue(`detalles.${index}.precio_unitario`, s.precio);
-      form.setValue(`detalles.${index}.servicio_id`, id);
-    }
+  const resetAndKeepOpen = () => {
+    setCart([]);
+    setClienteId(null);
+    setClienteQuery('');
+    setMetodoPago('efectivo');
+    setDescuento(0);
   };
 
-  const handleProductoSelect = (index: number, id: string) => {
-    const p = productos.find((pd) => pd.id === id);
-    if (p) {
-      form.setValue(`detalles.${index}.descripcion`, p.nombre);
-      form.setValue(`detalles.${index}.precio_unitario`, p.precio);
-      form.setValue(`detalles.${index}.producto_id`, id);
-    }
-  };
+  const submit = async (keepOpen: boolean) => {
+    if (!empleadoId) { toast.error('Selecciona un empleado'); return; }
+    if (cart.length === 0) { toast.error('Agrega al menos un ítem'); return; }
 
-  const metodoPago = form.watch('metodo_pago');
-  const empleadoId = form.watch('empleado_id');
-  const clienteId = form.watch('cliente_id');
-  const montoCuota = metodoPago === 'credito' && numCuotas > 0
-    ? parseFloat((total / numCuotas).toFixed(2))
-    : 0;
-
-  const onSubmit = async (data: FormData) => {
     setLoading(true);
+    lastEmpleadoRef.current = empleadoId;
+
     const result = await createVenta({
-      ...data,
-      cliente_id: data.cliente_id || undefined,
-      detalles: data.detalles.map((d) => ({
-        ...d,
-        producto_id: d.producto_id || undefined,
-        servicio_id: d.servicio_id || undefined,
+      empleado_id: empleadoId,
+      cliente_id: clienteId || undefined,
+      metodo_pago: metodoPago,
+      descuento,
+      detalles: cart.map((c) => ({
+        tipo: c.tipo,
+        producto_id: c.tipo === 'producto' ? c.ref_id : undefined,
+        servicio_id: c.tipo === 'servicio' ? c.ref_id : undefined,
+        descripcion: c.descripcion,
+        cantidad: c.cantidad,
+        precio_unitario: c.precio_unitario,
+        descuento: c.descuento,
       })),
     });
 
@@ -128,8 +183,8 @@ export function NuevaVentaDialog({ open, onClose, onCreated, empleados, clientes
       return;
     }
 
-    if (data.metodo_pago === 'credito' && result.ventaId) {
-      const creditoResult = await createCredito({
+    if (metodoPago === 'credito' && result.ventaId) {
+      const cr = await createCredito({
         venta_id: result.ventaId,
         cliente_id: clienteId || undefined,
         empleado_id: empleadoId,
@@ -137,223 +192,246 @@ export function NuevaVentaDialog({ open, onClose, onCreated, empleados, clientes
         numero_cuotas: numCuotas,
         fecha_primera_cuota: fechaPrimeraCuota,
       });
-      if (creditoResult.error) {
-        toast.error(`Venta creada pero error en crédito: ${creditoResult.error}`);
-      } else {
-        toast.success('Venta y plan de crédito registrados');
-      }
+      if (cr.error) toast.error(`Venta creada, error en crédito: ${cr.error}`);
+      else toast.success('Venta y crédito registrados');
     } else {
       toast.success('Venta registrada');
     }
 
     setLoading(false);
-    form.reset();
-    onCreated({ id: result.ventaId } as Venta);
+    onCreated(result.venta!, keepOpen);
+
+    if (keepOpen) {
+      resetAndKeepOpen();
+    }
   };
+
+  const empleadoNombre = empleados.find((e) => e.id === empleadoId);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nueva Venta</DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <DialogContent className="sm:max-w-4xl max-h-[92vh] flex flex-col p-0 gap-0">
+        {/* Header: empleado + cliente */}
+        <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
+          <DialogTitle className="text-base mb-2">Nueva Venta</DialogTitle>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Empleado *</Label>
-              <Select onValueChange={(v) => form.setValue('empleado_id', v as string)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Empleado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {empleados.filter((e) => e.activo).map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.nombre} {e.apellido}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {form.formState.errors.empleado_id && (
-                <p className="text-xs text-destructive">{form.formState.errors.empleado_id.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Cliente</Label>
-              <Select onValueChange={(v) => form.setValue('cliente_id', (v as string) === 'none' ? null : v as string)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin cliente</SelectItem>
-                  {clientes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Método de pago</Label>
-            <Select defaultValue="efectivo" onValueChange={(v) => form.setValue('metodo_pago', v as FormData['metodo_pago'])}>
-              <SelectTrigger>
-                <SelectValue />
+            <Select value={empleadoId} onValueChange={(v) => { if (v) { setEmpleadoId(v); lastEmpleadoRef.current = v; } }}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Empleado *">
+                  {empleadoNombre ? `${empleadoNombre.nombre} ${empleadoNombre.apellido}` : 'Empleado *'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {[['efectivo', 'Efectivo'], ['transferencia', 'Transferencia'], ['tarjeta', 'Tarjeta'], ['mixto', 'Mixto'], ['credito', 'Crédito / Cuotas']].map(([v, l]) => (
-                  <SelectItem key={v} value={v}>{l}</SelectItem>
+                {empleados.filter((e) => e.activo).map((e) => (
+                  <SelectItem key={e.id} value={e.id}>{e.nombre} {e.apellido}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
 
-          <Separator />
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label>Items</Label>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={addServicio} className="text-xs h-7">
-                  <Plus className="w-3 h-3 mr-1" /> Servicio
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={addProducto} className="text-xs h-7">
-                  <Plus className="w-3 h-3 mr-1" /> Producto
-                </Button>
-              </div>
+            <div ref={comboboxRef} className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                className="h-8 text-sm pl-8 pr-7"
+                placeholder="Buscar cliente (opcional)..."
+                value={clienteQuery}
+                onChange={(e) => handleClienteQuery(e.target.value)}
+                onFocus={() => clienteSugerencias.length > 0 && setShowSugerencias(true)}
+                autoComplete="off"
+              />
+              {clienteQuery && (
+                <button type="button" onClick={() => { setClienteQuery(''); setClienteId(null); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              {showSugerencias && clienteSugerencias.length > 0 && (
+                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                  {clienteSugerencias.map((c) => (
+                    <button key={c.id} type="button" className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent" onClick={() => selectCliente(c)}>
+                      <span className="font-medium">{c.nombre} {c.apellido}</span>
+                      {c.documento_identidad && <span className="ml-2 text-xs text-muted-foreground">{c.documento_identidad}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showSugerencias && clienteQuery && clienteSugerencias.length === 0 && (
+                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md px-3 py-2 text-sm text-muted-foreground">Sin resultados</div>
+              )}
             </div>
+          </div>
+        </DialogHeader>
 
-            {fields.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">Agrega servicios o productos</p>
+        {/* Body: items grid | cart */}
+        <div className="flex-1 min-h-0 flex flex-col sm:flex-row overflow-hidden">
+
+          {/* Items grid — click to add */}
+          <div className="sm:w-[55%] border-r overflow-y-auto p-3 space-y-4">
+            {servicios.filter((s) => s.activo).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Servicios</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {servicios.filter((s) => s.activo).map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => addToCart('servicio', s.id, s.nombre, s.precio)}
+                      className="flex flex-col items-start rounded-lg border px-3 py-2.5 text-left hover:bg-accent hover:border-primary transition-colors active:scale-95"
+                    >
+                      <span className="text-sm font-medium leading-tight">{s.nombre}</span>
+                      <span className="text-xs text-muted-foreground mt-0.5">{formatCurrency(s.precio)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
-            {fields.map((field, index) => (
-              <div key={field.id} className="rounded-lg border p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground uppercase">{field.tipo}</span>
-                  <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="h-6 w-6">
-                    <Trash2 className="w-3 h-3 text-destructive" />
-                  </Button>
-                </div>
-
-                {field.tipo === 'servicio' ? (
-                  <Select onValueChange={(v) => handleServicioSelect(index, v as string)}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="Seleccionar servicio" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {servicios.filter((s) => s.activo).map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.nombre} — {formatCurrency(s.precio)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Select onValueChange={(v) => handleProductoSelect(index, v as string)}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="Seleccionar producto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {productos.filter((p) => p.activo).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.nombre} — {formatCurrency(p.precio)} · Stock: {p.stock}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label className="text-xs">Cantidad</Label>
-                    <Input type="number" min={1} className="h-8 text-sm" {...form.register(`detalles.${index}.cantidad`, { valueAsNumber: true })} />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Precio</Label>
-                    <Input type="number" min={0} className="h-8 text-sm" {...form.register(`detalles.${index}.precio_unitario`, { valueAsNumber: true })} />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Descuento</Label>
-                    <Input type="number" min={0} className="h-8 text-sm" {...form.register(`detalles.${index}.descuento`, { valueAsNumber: true })} />
-                  </div>
+            {productos.filter((p) => p.activo && p.stock > 0).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Productos</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {productos.filter((p) => p.activo && p.stock > 0).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => addToCart('producto', p.id, p.nombre, p.precio)}
+                      className="flex flex-col items-start rounded-lg border px-3 py-2.5 text-left hover:bg-accent hover:border-primary transition-colors active:scale-95"
+                    >
+                      <span className="text-sm font-medium leading-tight">{p.nombre}</span>
+                      <span className="text-xs text-muted-foreground mt-0.5">{formatCurrency(p.precio)}</span>
+                      <span className="text-xs text-muted-foreground">Stock: {p.stock}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            {servicios.filter((s) => s.activo).length === 0 && productos.filter((p) => p.activo).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-10">No hay servicios ni productos activos</p>
+            )}
           </div>
 
-          {/* Configurador de crédito */}
-          {metodoPago === 'credito' && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900 p-4 space-y-3">
-              <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">Plan de crédito</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Número de cuotas</Label>
+          {/* Cart + checkout */}
+          <div className="sm:w-[45%] flex flex-col overflow-hidden">
+            {/* Cart items */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {cart.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8 gap-2">
+                  <ShoppingCart className="w-9 h-9 opacity-20" />
+                  <p className="text-sm">Toca un ítem para agregar</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {cart.map((item, i) => (
+                    <div key={`${item.tipo}-${item.ref_id}`} className="flex items-center gap-2 rounded-lg border px-2.5 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium leading-tight truncate">{item.descripcion}</p>
+                        <p className="text-xs text-muted-foreground">{formatCurrency(item.precio_unitario)}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button type="button" onClick={() => updateQty(i, -1)} className="w-6 h-6 flex items-center justify-center rounded border hover:bg-accent">
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-sm font-bold w-5 text-center">{item.cantidad}</span>
+                        <button type="button" onClick={() => updateQty(i, 1)} className="w-6 h-6 flex items-center justify-center rounded border hover:bg-accent">
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <button type="button" onClick={() => removeFromCart(i)} className="w-6 h-6 flex items-center justify-center rounded hover:text-destructive ml-0.5">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <span className="text-sm font-semibold w-14 text-right shrink-0">
+                        {formatCurrency(item.precio_unitario * item.cantidad - item.descuento)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Checkout panel */}
+            <div className="border-t p-3 space-y-3 shrink-0">
+              {/* Payment method buttons */}
+              <div className="flex flex-wrap gap-1.5">
+                {METODOS.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setMetodoPago(m.value)}
+                    className={`px-3 py-1.5 rounded-md border text-sm font-medium transition-colors ${
+                      metodoPago === m.value
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'hover:bg-accent'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Credit config */}
+              {metodoPago === 'credito' && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900 p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Cuotas</Label>
+                      <Input type="number" min={1} max={48} value={numCuotas} onChange={(e) => setNumCuotas(Math.max(1, parseInt(e.target.value) || 1))} className="h-7 text-sm mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Primera cuota</Label>
+                      <Input type="date" value={fechaPrimeraCuota} onChange={(e) => setFechaPrimeraCuota(e.target.value)} className="h-7 text-sm mt-1" min={format(new Date(), 'yyyy-MM-dd')} />
+                    </div>
+                  </div>
+                  {total > 0 && <p className="text-xs text-blue-700 dark:text-blue-400">{numCuotas} cuotas de <strong>{formatCurrency(montoCuota)}</strong></p>}
+                </div>
+              )}
+
+              {/* Discount + total */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Desc.</span>
                   <Input
                     type="number"
-                    min={1}
-                    max={48}
-                    value={numCuotas}
-                    onChange={(e) => setNumCuotas(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="h-8 text-sm"
+                    min={0}
+                    value={descuento}
+                    onChange={(e) => setDescuento(Math.max(0, Number(e.target.value)))}
+                    className="h-7 w-24 text-sm text-right"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Fecha primera cuota</Label>
-                  <Input
-                    type="date"
-                    value={fechaPrimeraCuota}
-                    onChange={(e) => setFechaPrimeraCuota(e.target.value)}
-                    className="h-8 text-sm"
-                    min={format(new Date(), 'yyyy-MM-dd')}
-                  />
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="text-xl font-bold">{formatCurrency(total)}</p>
                 </div>
               </div>
-              {total > 0 && numCuotas > 0 && (
-                <p className="text-xs text-blue-700 dark:text-blue-400">
-                  {numCuotas} cuota{numCuotas > 1 ? 's' : ''} de <strong>{formatCurrency(montoCuota)}</strong> · Total: <strong>{formatCurrency(total)}</strong>
-                </p>
-              )}
-            </div>
-          )}
 
-          <Separator />
+              <Separator />
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Descuento general</Label>
-              <Input
-                type="number"
-                min={0}
-                className="h-8 w-32 text-sm text-right"
-                {...form.register('descuento', { valueAsNumber: true })}
-              />
-            </div>
-
-            <div className="rounded-lg bg-muted/40 p-3 space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(subtotal)}</span>
-              </div>
-              {descuento > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Descuento</span>
-                  <span className="text-red-500">-{formatCurrency(descuento)}</span>
-                </div>
-              )}
-              <Separator className="my-1" />
-              <div className="flex justify-between font-semibold">
-                <span>Total</span>
-                <span>{formatCurrency(total)}</span>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" className="flex-1" onClick={onClose}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || cart.length === 0 || !empleadoId}
+                  onClick={() => submit(true)}
+                  title="Registrar y hacer otra venta"
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '+'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="flex-[2]"
+                  disabled={loading || cart.length === 0 || !empleadoId}
+                  onClick={() => submit(false)}
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : null}
+                  Registrar
+                </Button>
               </div>
             </div>
           </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Registrar venta
-            </Button>
-          </DialogFooter>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -91,14 +91,15 @@ export async function createCita(data: {
 
   const hora_fin = calcularHoraFin(data.hora_inicio, servicio.duracion_minutos);
 
-  // Check for conflicts
+  // Check for conflicts: existing.hora_inicio < new.hora_fin AND existing.hora_fin > new.hora_inicio
   const { data: conflicts } = await supabase
     .from('citas')
     .select('id')
     .eq('empleado_id', data.empleado_id)
     .eq('fecha', data.fecha)
     .not('estado', 'in', '("cancelada","no_asistio")')
-    .or(`hora_inicio.lt.${hora_fin},hora_fin.gt.${data.hora_inicio}`);
+    .lt('hora_inicio', hora_fin)
+    .gt('hora_fin', data.hora_inicio);
 
   if (conflicts && conflicts.length > 0) {
     return { error: 'El empleado ya tiene una cita en ese horario' };
@@ -142,7 +143,8 @@ export async function updateCita(id: string, data: Partial<Cita>) {
 
 export async function deleteCita(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from('citas').delete().eq('id', id);
+  // Soft delete — preserves audit trail
+  const { error } = await supabase.from('citas').update({ estado: 'cancelada' }).eq('id', id);
   if (error) return { error: 'Error al eliminar cita' };
   revalidatePath('/citas');
   return { success: true };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useState, useActionState } from 'react';
 import { updateConfiguracion } from '@/actions/configuracion';
 import type { Configuracion } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,25 @@ interface Props { config: Configuracion | null }
 
 export function ConfiguracionClient({ config }: Props) {
   const [state, formAction, isPending] = useActionState(updateConfiguracion, null);
+
+  const [fields, setFields] = useState({
+    nombre_negocio: config?.nombre_negocio ?? '',
+    telefono: config?.telefono ?? '',
+    email: config?.email ?? '',
+    direccion: config?.direccion ?? '',
+    ciudad: config?.ciudad ?? '',
+    pais: config?.pais ?? 'Colombia',
+    moneda: config?.moneda ?? 'COP',
+    simbolo_moneda: config?.simbolo_moneda ?? '$',
+    porcentaje_impuesto: String(config?.porcentaje_impuesto ?? 0),
+    zona_horaria: config?.zona_horaria ?? 'America/Bogota',
+    hora_apertura: config?.hora_apertura ?? '08:00',
+    hora_cierre: config?.hora_cierre ?? '18:00',
+    color_primario: config?.color_primario ?? '#3B82F6',
+  });
+
+  const set = (key: keyof typeof fields) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFields((prev) => ({ ...prev, [key]: e.target.value }));
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -36,30 +55,30 @@ export function ConfiguracionClient({ config }: Props) {
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Nombre del negocio *</Label>
-              <Input name="nombre_negocio" className="h-9" defaultValue={config?.nombre_negocio ?? ''} />
+              <Input name="nombre_negocio" className="h-9" value={fields.nombre_negocio} onChange={set('nombre_negocio')} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Teléfono</Label>
-                <Input name="telefono" className="h-9" defaultValue={config?.telefono ?? ''} />
+                <Input name="telefono" className="h-9" value={fields.telefono} onChange={set('telefono')} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Email</Label>
-                <Input name="email" type="email" className="h-9" defaultValue={config?.email ?? ''} />
+                <Input name="email" type="email" className="h-9" value={fields.email} onChange={set('email')} />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Dirección</Label>
-              <Input name="direccion" className="h-9" defaultValue={config?.direccion ?? ''} />
+              <Input name="direccion" className="h-9" value={fields.direccion} onChange={set('direccion')} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Ciudad</Label>
-                <Input name="ciudad" className="h-9" defaultValue={config?.ciudad ?? ''} />
+                <Input name="ciudad" className="h-9" value={fields.ciudad} onChange={set('ciudad')} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">País</Label>
-                <Input name="pais" className="h-9" defaultValue={config?.pais ?? 'Colombia'} />
+                <Input name="pais" className="h-9" value={fields.pais} onChange={set('pais')} />
               </div>
             </div>
           </CardContent>
@@ -73,15 +92,15 @@ export function ConfiguracionClient({ config }: Props) {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Moneda</Label>
-                <Input name="moneda" className="h-9" defaultValue={config?.moneda ?? 'COP'} />
+                <Input name="moneda" className="h-9" value={fields.moneda} onChange={set('moneda')} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Símbolo</Label>
-                <Input name="simbolo_moneda" className="h-9" defaultValue={config?.simbolo_moneda ?? '$'} />
+                <Input name="simbolo_moneda" className="h-9" value={fields.simbolo_moneda} onChange={set('simbolo_moneda')} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">IVA (%)</Label>
-                <Input name="porcentaje_impuesto" type="number" min={0} max={100} className="h-9" defaultValue={config?.porcentaje_impuesto ?? 0} />
+                <Input name="porcentaje_impuesto" type="number" min={0} max={100} className="h-9" value={fields.porcentaje_impuesto} onChange={set('porcentaje_impuesto')} />
               </div>
             </div>
           </CardContent>
@@ -94,16 +113,16 @@ export function ConfiguracionClient({ config }: Props) {
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Zona horaria</Label>
-              <Input name="zona_horaria" className="h-9" defaultValue={config?.zona_horaria ?? 'America/Bogota'} />
+              <Input name="zona_horaria" className="h-9" value={fields.zona_horaria} onChange={set('zona_horaria')} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Hora apertura</Label>
-                <Input name="hora_apertura" type="time" className="h-9" defaultValue={config?.hora_apertura ?? '08:00'} />
+                <Input name="hora_apertura" type="time" className="h-9" value={fields.hora_apertura} onChange={set('hora_apertura')} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Hora cierre</Label>
-                <Input name="hora_cierre" type="time" className="h-9" defaultValue={config?.hora_cierre ?? '18:00'} />
+                <Input name="hora_cierre" type="time" className="h-9" value={fields.hora_cierre} onChange={set('hora_cierre')} />
               </div>
             </div>
           </CardContent>
@@ -121,7 +140,8 @@ export function ConfiguracionClient({ config }: Props) {
                   name="color_primario"
                   type="color"
                   className="h-9 w-16 p-1 rounded-md cursor-pointer"
-                  defaultValue={config?.color_primario ?? '#3B82F6'}
+                  value={fields.color_primario}
+                  onChange={set('color_primario')}
                 />
                 <span className="text-sm text-muted-foreground">Color del sistema</span>
               </div>

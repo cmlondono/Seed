@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth';
 import { z } from 'zod';
 import type { Empleado, Horario } from '@/types';
 
@@ -20,6 +21,7 @@ export async function getEmpleados(): Promise<Empleado[]> {
   const { data, error } = await supabase
     .from('empleados')
     .select(`*, servicios:empleado_servicios(servicio:servicios(*)), horarios(*)`)
+    .eq('activo', true)
     .order('nombre');
   if (error) throw error;
   return (data ?? []).map((e) => ({
@@ -91,8 +93,10 @@ export async function updateEmpleado(id: string, input: EmpleadoInput) {
 }
 
 export async function deleteEmpleado(id: string) {
+  await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase.from('empleados').delete().eq('id', id);
+  // Soft delete — preserves FK integrity with citas y ventas históricas
+  const { error } = await supabase.from('empleados').update({ activo: false }).eq('id', id);
   if (error) return { error: 'Error al eliminar empleado' };
   revalidatePath('/empleados');
   return { success: true };
@@ -134,9 +138,9 @@ export async function getDisponibilidadEmpleado(
 ): Promise<string[]> {
   const supabase = await createClient();
 
-  const fechaDate = new Date(fecha);
-  const diaSemana = fechaDate.getDay();
+  const diaSemana = new Date(fecha).getDay();
 
+  // Horario must be fetched first — if none, no slots available
   const { data: horario } = await supabase
     .from('horarios')
     .select('*')
@@ -147,19 +151,21 @@ export async function getDisponibilidadEmpleado(
 
   if (!horario) return [];
 
-  const { data: citasExistentes } = await supabase
-    .from('citas')
-    .select('hora_inicio, hora_fin')
-    .eq('empleado_id', empleadoId)
-    .eq('fecha', fecha)
-    .not('estado', 'in', '("cancelada","no_asistio")');
-
-  const { data: bloqueos } = await supabase
-    .from('bloqueos')
-    .select('fecha_inicio, fecha_fin')
-    .eq('empleado_id', empleadoId)
-    .lte('fecha_inicio', `${fecha}T23:59:59`)
-    .gte('fecha_fin', `${fecha}T00:00:00`);
+  // Fetch citas and bloqueos in parallel
+  const [{ data: citasExistentes }, { data: bloqueos }] = await Promise.all([
+    supabase
+      .from('citas')
+      .select('hora_inicio, hora_fin')
+      .eq('empleado_id', empleadoId)
+      .eq('fecha', fecha)
+      .not('estado', 'in', '("cancelada","no_asistio")'),
+    supabase
+      .from('bloqueos')
+      .select('fecha_inicio, fecha_fin')
+      .eq('empleado_id', empleadoId)
+      .lte('fecha_inicio', `${fecha}T23:59:59`)
+      .gte('fecha_fin', `${fecha}T00:00:00`),
+  ]);
 
   const [startH, startM] = horario.hora_inicio.split(':').map(Number);
   const [endH, endM] = horario.hora_fin.split(':').map(Number);
@@ -175,9 +181,7 @@ export async function getDisponibilidadEmpleado(
     const ocupado = citasExistentes?.some((c) => {
       const [cs, cm] = c.hora_inicio.split(':').map(Number);
       const [ce, cem] = c.hora_fin.split(':').map(Number);
-      const citaStart = cs * 60 + cm;
-      const citaEnd = ce * 60 + cem;
-      return current < citaEnd && slotFin > citaStart;
+      return current < (ce * 60 + cem) && slotFin > (cs * 60 + cm);
     });
 
     const bloqueado = bloqueos?.some((b) => {
@@ -188,10 +192,7 @@ export async function getDisponibilidadEmpleado(
       return slotStart < bEnd && slotEnd > bStart;
     });
 
-    if (!ocupado && !bloqueado) {
-      slots.push(hStart);
-    }
-
+    if (!ocupado && !bloqueado) slots.push(hStart);
     current += 30;
   }
 

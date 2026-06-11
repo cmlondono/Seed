@@ -19,6 +19,7 @@ const schema = z.object({
   apellido: z.string().optional(),
   telefono: z.string().optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
+  documento_identidad: z.string().optional(),
   observaciones: z.string().optional(),
 });
 
@@ -37,7 +38,7 @@ export function ClienteDialog({ open, cliente, onClose, onSaved }: Props) {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { nombre: '', apellido: '', telefono: '', email: '', observaciones: '' },
+    defaultValues: { nombre: '', apellido: '', telefono: '', email: '', documento_identidad: '', observaciones: '' },
   });
 
   useEffect(() => {
@@ -47,10 +48,11 @@ export function ClienteDialog({ open, cliente, onClose, onSaved }: Props) {
         apellido: cliente.apellido ?? '',
         telefono: cliente.telefono ?? '',
         email: cliente.email ?? '',
+        documento_identidad: cliente.documento_identidad ?? '',
         observaciones: cliente.observaciones ?? '',
       });
     } else {
-      form.reset({ nombre: '', apellido: '', telefono: '', email: '', observaciones: '' });
+      form.reset({ nombre: '', apellido: '', telefono: '', email: '', documento_identidad: '', observaciones: '' });
     }
   }, [cliente, open, form]);
 
@@ -61,6 +63,7 @@ export function ClienteDialog({ open, cliente, onClose, onSaved }: Props) {
       apellido: data.apellido || undefined,
       telefono: data.telefono || undefined,
       email: data.email || undefined,
+      documento_identidad: data.documento_identidad || undefined,
       observaciones: data.observaciones || undefined,
     };
 
@@ -93,6 +96,11 @@ export function ClienteDialog({ open, cliente, onClose, onSaved }: Props) {
               <Label className="text-xs">Apellido</Label>
               <Input className="h-8 text-sm" {...form.register('apellido')} />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Documento de identidad</Label>
+            <Input className="h-8 text-sm" placeholder="CC, NIT, Pasaporte..." {...form.register('documento_identidad')} />
           </div>
 
           <div className="space-y-1.5">

@@ -79,7 +79,8 @@ export async function updateServicio(id: string, input: ServicioInput) {
 
 export async function deleteServicio(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from('servicios').delete().eq('id', id);
+  // Soft delete — preserves FK integrity with citas históricas
+  const { error } = await supabase.from('servicios').update({ activo: false }).eq('id', id);
   if (error) return { error: 'Error al eliminar servicio' };
   revalidatePath('/servicios');
   return { success: true };

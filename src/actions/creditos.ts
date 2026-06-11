@@ -50,6 +50,7 @@ export async function createCredito(input: CreateCreditoInput): Promise<{ id?: s
       total_credito: input.total_credito,
       saldo_pendiente: input.total_credito,
       numero_cuotas: input.numero_cuotas,
+      estado: 'activo',
       notas: input.notas || null,
     })
     .select('id')
@@ -63,6 +64,7 @@ export async function createCredito(input: CreateCreditoInput): Promise<{ id?: s
     monto: i === input.numero_cuotas - 1 ? montoCuota + diferencia : montoCuota,
     fecha_vencimiento: format(addMonths(new Date(input.fecha_primera_cuota), i), 'yyyy-MM-dd'),
     estado: 'pendiente' as const,
+    email_enviado: false,
   }));
 
   const { error: cuotasError } = await supabase.from('cuotas_credito').insert(cuotas);

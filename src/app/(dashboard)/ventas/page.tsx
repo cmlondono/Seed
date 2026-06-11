@@ -2,7 +2,7 @@ import { getVentas } from '@/actions/ventas';
 import { getEmpleados } from '@/actions/empleados';
 import { getClientes } from '@/actions/clientes';
 import { getServicios } from '@/actions/servicios';
-import { getProductos } from '@/actions/ventas';
+import { getProductos } from '@/actions/inventario';
 import { VentasClient } from '@/components/modules/ventas/ventas-client';
 
 export const dynamic = 'force-dynamic';

@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
-import type { Venta, VentaFormData, Producto } from '@/types';
+import { format, startOfMonth } from 'date-fns';
+import type { Venta, VentaFormData } from '@/types';
 
 const DetalleSchema = z.object({
   tipo: z.enum(['producto', 'servicio']),
@@ -31,13 +32,17 @@ export async function getVentas(filters?: {
   empleado_id?: string;
 }): Promise<Venta[]> {
   const supabase = await createClient();
+
+  // Default to current month when no date range specified
+  const desde = filters?.desde ?? format(startOfMonth(new Date()), 'yyyy-MM-dd');
+
   let query = supabase
     .from('ventas')
-    .select(`*, cliente:clientes(*), empleado:empleados(*), detalles:detalle_ventas(*, producto:productos(*), servicio:servicios(*))`)
+    .select(`*, cliente:clientes(*), empleado:empleados(*), detalles:detalle_ventas(*, servicio:servicios(*))`)
+    .gte('created_at', desde)
     .order('created_at', { ascending: false });
 
-  if (filters?.desde) query = query.gte('created_at', filters.desde);
-  if (filters?.hasta) query = query.lte('created_at', filters.hasta);
+  if (filters?.hasta) query = query.lte('created_at', `${filters.hasta}T23:59:59`);
   if (filters?.empleado_id) query = query.eq('empleado_id', filters.empleado_id);
 
   const { data, error } = await query;
@@ -49,7 +54,7 @@ export async function getVenta(id: string): Promise<Venta | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('ventas')
-    .select(`*, cliente:clientes(*), empleado:empleados(*), detalles:detalle_ventas(*, producto:productos(*), servicio:servicios(*))`)
+    .select(`*, cliente:clientes(*), empleado:empleados(*), detalles:detalle_ventas(*, servicio:servicios(*))`)
     .eq('id', id)
     .single();
   if (error) return null;
@@ -64,13 +69,40 @@ export async function createVenta(ventaData: VentaFormData) {
 
   const { detalles, descuento, ...ventaBase } = result.data;
 
+  const supabase = await createClient();
+
+  // Check cita not already linked to another venta
+  if (ventaBase.cita_id) {
+    const { data: citaExistente } = await supabase
+      .from('ventas')
+      .select('id')
+      .eq('cita_id', ventaBase.cita_id)
+      .neq('estado', 'cancelada')
+      .single();
+    if (citaExistente) return { error: 'Esta cita ya tiene una venta registrada' };
+  }
+
+  // Pre-validate ALL stock BEFORE inserting venta
+  const productosDetalles = detalles.filter((d) => d.tipo === 'producto' && d.producto_id);
+  const stockSnapshots: { inventario_id: string; stock_actual: number; nombre: string }[] = [];
+
+  for (const detalle of productosDetalles) {
+    const { data: inv } = await supabase
+      .from('inventario')
+      .select('stock_actual, nombre')
+      .eq('id', detalle.producto_id!)
+      .single();
+
+    if (!inv || inv.stock_actual < detalle.cantidad) {
+      return { error: `Stock insuficiente: ${inv?.nombre ?? detalle.descripcion}` };
+    }
+    stockSnapshots.push({ inventario_id: detalle.producto_id!, stock_actual: inv.stock_actual, nombre: inv.nombre });
+  }
+
   // Calculate totals
   const subtotal = detalles.reduce((acc, d) => acc + (d.precio_unitario * d.cantidad - d.descuento), 0);
   const totalConDescuento = Math.max(0, subtotal - descuento);
 
-  const supabase = await createClient();
-
-  // Get tax rate
   const { data: config } = await supabase.from('configuracion').select('porcentaje_impuesto').single();
   const taxRate = config?.porcentaje_impuesto ?? 0;
   const impuesto = totalConDescuento * (taxRate / 100);
@@ -96,33 +128,26 @@ export async function createVenta(ventaData: VentaFormData) {
 
   if (ventaError) return { error: 'Error al crear venta' };
 
-  // Check and decrement inventario stock before inserting details
-  const productosDetalles = detalles.filter((d) => d.tipo === 'producto' && d.producto_id);
-  for (const detalle of productosDetalles) {
-    const { data: inv } = await supabase
-      .from('inventario')
-      .select('stock_actual, nombre')
-      .eq('id', detalle.producto_id!)
-      .single();
-
-    if (!inv || inv.stock_actual < detalle.cantidad) {
-      await supabase.from('ventas').delete().eq('id', venta.id);
-      return { error: `Stock insuficiente: ${inv?.nombre ?? detalle.descripcion}` };
-    }
-
+  // Decrement stock (pre-validated, so this should always succeed)
+  for (const snap of stockSnapshots) {
     await supabase
       .from('inventario')
-      .update({ stock_actual: inv.stock_actual - detalle.cantidad })
-      .eq('id', detalle.producto_id!);
+      .update({ stock_actual: snap.stock_actual - (productosDetalles.find((d) => d.producto_id === snap.inventario_id)?.cantidad ?? 0) })
+      .eq('id', snap.inventario_id);
   }
 
-  // Insert details — producto_id set to null since we use inventario directly (no productos table rows)
+  // Insert detalle_ventas
+  // inventario_id is set only if the column exists (migration 1 in migrations.sql)
   const detallesConVenta = detalles.map((d) => ({
-    ...d,
     venta_id: venta.id,
-    subtotal: d.precio_unitario * d.cantidad - d.descuento,
+    tipo: d.tipo,
     producto_id: null,
     servicio_id: d.servicio_id || null,
+    descripcion: d.descripcion,
+    cantidad: d.cantidad,
+    precio_unitario: d.precio_unitario,
+    descuento: d.descuento,
+    subtotal: d.precio_unitario * d.cantidad - d.descuento,
   }));
 
   const { error: detallesError } = await supabase.from('detalle_ventas').insert(detallesConVenta);
@@ -132,43 +157,30 @@ export async function createVenta(ventaData: VentaFormData) {
     return { error: 'Error al guardar detalles de venta' };
   }
 
-  // Update cita to completada if linked
   if (ventaBase.cita_id) {
     await supabase.from('citas').update({ estado: 'completada' }).eq('id', ventaBase.cita_id);
   }
 
+  const { data: ventaCompleta } = await supabase
+    .from('ventas')
+    .select(`*, cliente:clientes(*), empleado:empleados(*), detalles:detalle_ventas(*, servicio:servicios(*))`)
+    .eq('id', venta.id)
+    .single();
+
   revalidatePath('/ventas');
   revalidatePath('/dashboard');
   revalidatePath('/inventario');
-  return { success: 'Venta registrada', ventaId: venta.id };
+  revalidatePath('/creditos');
+  return { success: 'Venta registrada', ventaId: venta.id, venta: ventaCompleta as Venta };
 }
 
 export async function cancelarVenta(id: string) {
   const supabase = await createClient();
+
   const { error } = await supabase.from('ventas').update({ estado: 'cancelada' }).eq('id', id);
   if (error) return { error: 'Error al cancelar venta' };
+
   revalidatePath('/ventas');
+  revalidatePath('/inventario');
   return { success: true };
-}
-
-export async function getProductos(): Promise<Producto[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from('inventario')
-    .select('*')
-    .eq('activo', true)
-    .order('nombre');
-
-  return (data ?? []).map((item) => ({
-    id: item.id,
-    nombre: item.nombre,
-    descripcion: item.descripcion ?? undefined,
-    precio: item.precio_venta > 0 ? item.precio_venta : item.costo_unitario,
-    costo: item.costo_unitario,
-    stock: item.stock_actual,
-    inventario_id: item.id,
-    activo: item.activo,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
-  }));
 }

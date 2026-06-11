@@ -21,7 +21,8 @@ export function formatTime(time: string): string {
   return time.substring(0, 5);
 }
 
-export function formatDateTime(date: string): string {
+export function formatDateTime(date: string | undefined | null): string {
+  if (!date) return '—';
   return format(parseISO(date), 'dd MMM yyyy HH:mm', { locale: es });
 }
 
