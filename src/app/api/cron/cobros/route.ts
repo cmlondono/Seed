@@ -7,17 +7,6 @@ import { es } from 'date-fns/locale';
 
 export const dynamic = 'force-dynamic';
 
-function horaActualColombia(): number {
-  return parseInt(
-    new Intl.DateTimeFormat('es-CO', {
-      hour: 'numeric',
-      hour12: false,
-      timeZone: 'America/Bogota',
-    }).format(new Date()),
-    10,
-  );
-}
-
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce(
     (t, [k, v]) => t.replaceAll(`{${k}}`, v),
@@ -41,13 +30,6 @@ export async function GET(req: NextRequest) {
     .from('configuracion')
     .select('nombre_negocio, telefono, simbolo_moneda, email_hora_envio, email_asunto, email_cuerpo')
     .single();
-
-  // Verificar hora configurada (cron corre cada hora)
-  const horaEnvio = config?.email_hora_envio ?? 12;
-  const horaActual = horaActualColombia();
-  if (horaActual !== horaEnvio) {
-    return NextResponse.json({ ok: true, skipped: true, hora_actual: horaActual, hora_envio: horaEnvio });
-  }
 
   // Marcar cuotas vencidas
   await supabase
