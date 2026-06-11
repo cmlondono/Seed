@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Save } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, Save, Mail } from 'lucide-react';
 
 interface Props { config: Configuracion | null }
 
@@ -29,9 +30,15 @@ export function ConfiguracionClient({ config }: Props) {
     hora_apertura: config?.hora_apertura ?? '08:00',
     hora_cierre: config?.hora_cierre ?? '18:00',
     color_primario: config?.color_primario ?? '#3B82F6',
+    email_hora_envio: String(config?.email_hora_envio ?? 12),
+    email_asunto: config?.email_asunto ?? 'Recordatorio de pago — Cuota {numero_cuota}/{total_cuotas}',
+    email_cuerpo: config?.email_cuerpo ?? `Estimado/a {cliente_nombre},\n\nTiene una cuota con vencimiento el {fecha_vencimiento}.\n\nCuota: {numero_cuota} de {total_cuotas}\nMonto: {monto}\n\nContáctenos{negocio_telefono} para coordinar su pago.\n\n{negocio_nombre}`,
   });
 
   const set = (key: keyof typeof fields) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFields((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const setText = (key: keyof typeof fields) => (e: React.ChangeEvent<HTMLTextAreaElement>) =>
     setFields((prev) => ({ ...prev, [key]: e.target.value }));
 
   return (
@@ -145,6 +152,57 @@ export function ConfiguracionClient({ config }: Props) {
                 />
                 <span className="text-sm text-muted-foreground">Color del sistema</span>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Mail className="w-4 h-4" /> Recordatorios de pago por email
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Hora de envío (hora Colombia)</Label>
+              <Input
+                name="email_hora_envio"
+                type="number"
+                min={0}
+                max={23}
+                className="h-9 w-24"
+                value={fields.email_hora_envio}
+                onChange={set('email_hora_envio')}
+              />
+              <p className="text-xs text-muted-foreground">0 = medianoche · 12 = mediodía · 17 = 5pm</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Asunto del correo</Label>
+              <Input
+                name="email_asunto"
+                className="h-9"
+                value={fields.email_asunto}
+                onChange={set('email_asunto')}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Cuerpo del mensaje</Label>
+              <Textarea
+                name="email_cuerpo"
+                rows={8}
+                className="text-sm font-mono"
+                value={fields.email_cuerpo}
+                onChange={setText('email_cuerpo')}
+              />
+              <p className="text-xs text-muted-foreground">
+                Variables disponibles: <code className="bg-muted px-1 rounded">{'{cliente_nombre}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{numero_cuota}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{total_cuotas}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{monto}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{fecha_vencimiento}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{negocio_nombre}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{negocio_telefono}'}</code>
+              </p>
             </div>
           </CardContent>
         </Card>

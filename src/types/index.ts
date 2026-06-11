@@ -265,6 +265,9 @@ export interface Configuracion {
   hora_apertura: string;
   hora_cierre: string;
   color_primario: string;
+  email_hora_envio: number;
+  email_asunto?: string;
+  email_cuerpo?: string;
   created_at: string;
   updated_at: string;
 }

@@ -1,11 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sendMail } from '@/lib/email/mailer';
-import { cuotaCobroHtml, cuotaCobroText } from '@/lib/email/templates/cuota-cobro';
+import { cuotaCobroHtml } from '@/lib/email/templates/cuota-cobro';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export const dynamic = 'force-dynamic';
+
+function horaActualColombia(): number {
+  return parseInt(
+    new Intl.DateTimeFormat('es-CO', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: 'America/Bogota',
+    }).format(new Date()),
+    10,
+  );
+}
+
+function renderTemplate(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce(
+    (t, [k, v]) => t.replaceAll(`{${k}}`, v),
+    template,
+  );
+}
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -18,7 +36,20 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const hoy = format(new Date(), 'yyyy-MM-dd');
 
-  // Marcar como vencidas las cuotas pendientes con fecha pasada
+  // Obtener config
+  const { data: config } = await supabase
+    .from('configuracion')
+    .select('nombre_negocio, telefono, simbolo_moneda, email_hora_envio, email_asunto, email_cuerpo')
+    .single();
+
+  // Verificar hora configurada (cron corre cada hora)
+  const horaEnvio = config?.email_hora_envio ?? 12;
+  const horaActual = horaActualColombia();
+  if (horaActual !== horaEnvio) {
+    return NextResponse.json({ ok: true, skipped: true, hora_actual: horaActual, hora_envio: horaEnvio });
+  }
+
+  // Marcar cuotas vencidas
   await supabase
     .from('cuotas_credito')
     .update({ estado: 'vencido' })
@@ -27,16 +58,14 @@ export async function GET(req: NextRequest) {
 
   await supabase.rpc('actualizar_estado_creditos_vencidos').maybeSingle();
 
-  // Obtener config del negocio
-  const { data: config } = await supabase
-    .from('configuracion')
-    .select('nombre_negocio, telefono, email, simbolo_moneda')
-    .single();
-
   const remitente = process.env.GMAIL_USER ?? '';
   const negocioNombre = config?.nombre_negocio ?? 'Tu Negocio';
+  const simbolo = config?.simbolo_moneda ?? '$';
 
-  // Cuotas que vencen hoy, pendientes, sin email enviado
+  const asuntoTpl = config?.email_asunto ?? 'Recordatorio de pago — Cuota {numero_cuota}/{total_cuotas}';
+  const cuerpoTpl = config?.email_cuerpo ?? `Estimado/a {cliente_nombre},\n\nTiene una cuota con vencimiento el {fecha_vencimiento}.\n\nCuota: {numero_cuota} de {total_cuotas}\nMonto: {monto}\n\n{negocio_nombre}`;
+
+  // Cuotas que vencen hoy
   const { data: cuotas } = await supabase
     .from('cuotas_credito')
     .select(`
@@ -67,24 +96,36 @@ export async function GET(req: NextRequest) {
       { locale: es },
     );
 
-    const emailData = {
-      clienteNombre: `${cliente.nombre}${cliente.apellido ? ' ' + cliente.apellido : ''}`,
-      numeroCuota: cuota.numero_cuota,
-      totalCuotas: credito.numero_cuotas,
-      monto: cuota.monto,
-      fechaVencimiento: fechaFormateada,
-      negocioNombre,
-      negocioTelefono: config?.telefono,
-      simboloMoneda: config?.simbolo_moneda ?? '$',
+    const montoFormateado = `${simbolo}${cuota.monto.toLocaleString('es-CO')}`;
+    const telTexto = config?.telefono ? ` al ${config.telefono}` : '';
+    const clienteNombre = `${cliente.nombre}${cliente.apellido ? ' ' + cliente.apellido : ''}`;
+
+    const vars: Record<string, string> = {
+      cliente_nombre: clienteNombre,
+      numero_cuota: String(cuota.numero_cuota),
+      total_cuotas: String(credito.numero_cuotas),
+      monto: montoFormateado,
+      fecha_vencimiento: fechaFormateada,
+      negocio_nombre: negocioNombre,
+      negocio_telefono: telTexto,
     };
 
     try {
       await sendMail({
         from: `${negocioNombre} <${remitente}>`,
         to: cliente.email,
-        subject: `Recordatorio de pago — Cuota ${cuota.numero_cuota}/${credito.numero_cuotas}`,
-        html: cuotaCobroHtml(emailData),
-        text: cuotaCobroText(emailData),
+        subject: renderTemplate(asuntoTpl, vars),
+        html: cuotaCobroHtml({
+          clienteNombre,
+          numeroCuota: cuota.numero_cuota,
+          totalCuotas: credito.numero_cuotas,
+          monto: cuota.monto,
+          fechaVencimiento: fechaFormateada,
+          negocioNombre,
+          negocioTelefono: config?.telefono,
+          simboloMoneda: simbolo,
+        }),
+        text: renderTemplate(cuerpoTpl, vars),
       });
 
       await supabase
@@ -98,10 +139,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({
-    ok: true,
-    fecha: hoy,
-    emails_enviados: enviados,
-    errores,
-  });
+  return NextResponse.json({ ok: true, fecha: hoy, emails_enviados: enviados, errores });
 }

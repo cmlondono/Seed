@@ -20,6 +20,9 @@ const ConfigSchema = z.object({
   hora_apertura: z.string().optional(),
   hora_cierre: z.string().optional(),
   color_primario: z.string().optional(),
+  email_hora_envio: z.coerce.number().int().min(0).max(23).default(12),
+  email_asunto: z.string().optional(),
+  email_cuerpo: z.string().optional(),
 });
 
 export async function getConfiguracion(): Promise<Configuracion | null> {
@@ -44,6 +47,9 @@ export async function updateConfiguracion(prevState: unknown, formData: FormData
     hora_apertura: formData.get('hora_apertura'),
     hora_cierre: formData.get('hora_cierre'),
     color_primario: formData.get('color_primario'),
+    email_hora_envio: formData.get('email_hora_envio') ?? 12,
+    email_asunto: formData.get('email_asunto') || undefined,
+    email_cuerpo: formData.get('email_cuerpo') || undefined,
   });
 
   if (!result.success) {
