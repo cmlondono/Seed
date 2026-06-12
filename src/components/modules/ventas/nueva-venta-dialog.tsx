@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { formatCurrency } from '@/lib/utils';
 import { Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart } from 'lucide-react';
+import { useAuthStore } from '@/hooks/use-auth-store';
 
 interface CartItem {
   tipo: 'servicio' | 'producto';
@@ -48,6 +49,8 @@ interface Props {
 }
 
 export function NuevaVentaDialog({ open, onClose, onCreated, empleados, clientes, servicios, productos }: Props) {
+  const { profile } = useAuthStore();
+  const isEmpleado = profile?.role === 'empleado';
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [empleadoId, setEmpleadoId] = useState('');
@@ -79,7 +82,14 @@ export function NuevaVentaDialog({ open, onClose, onCreated, empleados, clientes
       setClienteQuery('');
       setMetodoPago('efectivo');
       setDescuento(0);
-      if (lastEmpleadoRef.current) setEmpleadoId(lastEmpleadoRef.current);
+      if (isEmpleado && profile) {
+        const mine = empleados.find(
+          (e) => e.profile_id === profile.id || e.email === profile.email
+        );
+        if (mine) { setEmpleadoId(mine.id); lastEmpleadoRef.current = mine.id; }
+      } else if (lastEmpleadoRef.current) {
+        setEmpleadoId(lastEmpleadoRef.current);
+      }
     }
   }, [open]);
 
@@ -215,18 +225,24 @@ export function NuevaVentaDialog({ open, onClose, onCreated, empleados, clientes
         <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
           <DialogTitle className="text-base mb-2">Nueva Venta</DialogTitle>
           <div className="grid grid-cols-2 gap-3">
-            <Select value={empleadoId} onValueChange={(v) => { if (v) { setEmpleadoId(v); lastEmpleadoRef.current = v; } }}>
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue placeholder="Empleado *">
-                  {empleadoNombre ? `${empleadoNombre.nombre} ${empleadoNombre.apellido}` : 'Empleado *'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {empleados.filter((e) => e.activo).map((e) => (
-                  <SelectItem key={e.id} value={e.id}>{e.nombre} {e.apellido}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isEmpleado ? (
+              <div className="h-8 px-3 flex items-center rounded-md border bg-muted text-sm text-muted-foreground">
+                {empleadoNombre ? `${empleadoNombre.nombre} ${empleadoNombre.apellido}` : 'Sin empleado asignado'}
+              </div>
+            ) : (
+              <Select value={empleadoId} onValueChange={(v) => { if (v) { setEmpleadoId(v); lastEmpleadoRef.current = v; } }}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Empleado *">
+                    {empleadoNombre ? `${empleadoNombre.nombre} ${empleadoNombre.apellido}` : 'Empleado *'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {empleados.filter((e) => e.activo).map((e) => (
+                    <SelectItem key={e.id} value={e.id}>{e.nombre} {e.apellido}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             <div ref={comboboxRef} className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />

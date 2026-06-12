@@ -49,7 +49,7 @@ export async function createUsuario(prevState: unknown, formData: FormData) {
 
   if (authError) return { error: authError.message };
 
-  const { error: profileError } = await admin.from('profiles').insert({
+  const { error: profileError } = await admin.from('profiles').upsert({
     id: authData.user.id,
     email: result.data.email,
     nombre: result.data.nombre,

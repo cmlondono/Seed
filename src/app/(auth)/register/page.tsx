@@ -7,11 +7,30 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MailCheck } from 'lucide-react';
 import Link from 'next/link';
 
 export default function RegisterPage() {
   const [state, formAction, isPending] = useActionState(register, null);
+
+  if (state?.verify) {
+    return (
+      <Card className="w-full max-w-sm shadow-lg">
+        <CardContent className="pt-8 pb-8 flex flex-col items-center text-center gap-4">
+          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+            <MailCheck className="w-7 h-7 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Verifica tu correo</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Te enviamos un enlace de verificación. Revisa tu bandeja de entrada y haz clic en el enlace para activar tu cuenta.
+            </p>
+          </div>
+          <Link href="/login" className="text-sm text-primary hover:underline">Volver al inicio de sesión</Link>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-sm shadow-lg">

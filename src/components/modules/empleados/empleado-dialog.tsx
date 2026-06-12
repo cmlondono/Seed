@@ -26,6 +26,7 @@ const schema = z.object({
   cargo: z.string().min(1, 'Requerido'),
   color_calendario: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   activo: z.boolean(),
+  password: z.string().min(6, 'Mínimo 6 caracteres').optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -94,6 +95,11 @@ export function EmpleadoDialog({ open, empleado, servicios, onClose, onSaved }: 
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
+    if (!isEdit && !data.password) {
+      toast.error('Contraseña requerida');
+      setLoading(false);
+      return;
+    }
     const input = {
       nombre: data.nombre,
       apellido: data.apellido,
@@ -111,7 +117,7 @@ export function EmpleadoDialog({ open, empleado, servicios, onClose, onSaved }: 
       result = await updateEmpleado(empleado.id, input);
       savedId = empleado.id;
     } else {
-      result = await createEmpleado(input);
+      result = await createEmpleado({ ...input, password: data.password || '' });
       savedId = result.item?.id ?? '';
     }
 
@@ -166,6 +172,14 @@ export function EmpleadoDialog({ open, empleado, servicios, onClose, onSaved }: 
                 <Input type="email" className="h-8 text-sm" {...form.register('email')} />
                 {form.formState.errors.email && <p className="text-xs text-destructive">{form.formState.errors.email.message}</p>}
               </div>
+
+              {!isEdit && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Contraseña *</Label>
+                  <Input type="password" className="h-8 text-sm" placeholder="Mínimo 6 caracteres" {...form.register('password')} />
+                  {form.formState.errors.password && <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">

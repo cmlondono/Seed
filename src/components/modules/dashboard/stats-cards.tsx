@@ -5,9 +5,9 @@ import { TrendingUp, CalendarDays, Users, AlertTriangle, DollarSign, CalendarClo
 import { formatCurrency } from '@/lib/utils';
 import type { DashboardStats } from '@/types';
 
-interface Props { stats: DashboardStats }
+interface Props { stats: DashboardStats; isAdmin?: boolean }
 
-export function StatsCards({ stats }: Props) {
+export function StatsCards({ stats, isAdmin = true }: Props) {
   const cards = [
     {
       title: 'Ventas Hoy',
@@ -16,6 +16,7 @@ export function StatsCards({ stats }: Props) {
       description: 'Ingresos del día',
       color: 'text-green-600',
       bg: 'bg-green-50 dark:bg-green-950',
+      adminOnly: true,
     },
     {
       title: 'Ventas del Mes',
@@ -24,6 +25,7 @@ export function StatsCards({ stats }: Props) {
       description: 'Ingresos del mes actual',
       color: 'text-blue-600',
       bg: 'bg-blue-50 dark:bg-blue-950',
+      adminOnly: true,
     },
     {
       title: 'Citas Hoy',
@@ -32,6 +34,7 @@ export function StatsCards({ stats }: Props) {
       description: 'Citas programadas para hoy',
       color: 'text-purple-600',
       bg: 'bg-purple-50 dark:bg-purple-950',
+      adminOnly: false,
     },
     {
       title: 'Citas Pendientes',
@@ -40,6 +43,7 @@ export function StatsCards({ stats }: Props) {
       description: 'Por confirmar o completar',
       color: 'text-yellow-600',
       bg: 'bg-yellow-50 dark:bg-yellow-950',
+      adminOnly: false,
     },
     {
       title: 'Clientes Nuevos',
@@ -48,6 +52,7 @@ export function StatsCards({ stats }: Props) {
       description: 'Este mes',
       color: 'text-indigo-600',
       bg: 'bg-indigo-50 dark:bg-indigo-950',
+      adminOnly: true,
     },
     {
       title: 'Stock Bajo',
@@ -56,8 +61,9 @@ export function StatsCards({ stats }: Props) {
       description: 'Items bajo stock mínimo',
       color: stats.items_bajo_stock > 0 ? 'text-red-600' : 'text-gray-600',
       bg: stats.items_bajo_stock > 0 ? 'bg-red-50 dark:bg-red-950' : 'bg-gray-50 dark:bg-gray-900',
+      adminOnly: false,
     },
-  ];
+  ].filter((c) => isAdmin || !c.adminOnly);
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">

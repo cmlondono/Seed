@@ -79,13 +79,15 @@ export async function register(prevState: unknown, formData: FormData) {
   const { createAdminClient } = await import('@/lib/supabase/admin');
   const admin = createAdminClient();
 
-  // Create auth user
-  const { data: authData, error: authError } = await admin.auth.admin.createUser({
+  // signUp sends verification email — user must confirm before logging in
+  const supabase = await createClient();
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
-    email_confirm: true,
+    options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard` },
   });
-  if (authError) return { error: authError.message };
+  if (signUpError) return { error: signUpError.message };
+  if (!signUpData.user) return { error: 'Error al crear cuenta' };
 
   // Create negocio
   const { data: negocio, error: negocioError } = await admin
@@ -95,13 +97,13 @@ export async function register(prevState: unknown, formData: FormData) {
     .single();
 
   if (negocioError) {
-    await admin.auth.admin.deleteUser(authData.user.id);
+    await admin.auth.admin.deleteUser(signUpData.user.id);
     return { error: 'Error al crear negocio' };
   }
 
-  // Create profile
-  const { error: profileError } = await admin.from('profiles').insert({
-    id: authData.user.id,
+  // Upsert profile with negocio_id
+  const { error: profileError } = await admin.from('profiles').upsert({
+    id: signUpData.user.id,
     email,
     nombre,
     apellido,
@@ -111,15 +113,10 @@ export async function register(prevState: unknown, formData: FormData) {
   });
 
   if (profileError) {
-    await admin.auth.admin.deleteUser(authData.user.id);
+    await admin.auth.admin.deleteUser(signUpData.user.id);
     await admin.from('negocios').delete().eq('id', negocio.id);
-    return { error: 'Error al crear perfil' };
+    return { error: `Error al crear perfil: ${profileError.message}` };
   }
 
-  // Sign in the new user
-  const supabase = await createClient();
-  await supabase.auth.signInWithPassword({ email, password });
-
-  revalidatePath('/', 'layout');
-  redirect('/dashboard');
+  return { verify: true };
 }

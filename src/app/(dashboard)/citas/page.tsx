@@ -5,6 +5,7 @@ import { getServicios } from '@/actions/servicios';
 import { CalendarioView } from '@/components/modules/citas/calendario-view';
 import { NuevaCitaButton } from '@/components/modules/citas/nueva-cita-button';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +13,19 @@ export default async function CitasPage() {
   const inicio = format(startOfMonth(new Date()), 'yyyy-MM-dd');
   const fin = format(endOfMonth(new Date()), 'yyyy-MM-dd');
 
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user!.id).single();
+  const isAdmin = profile?.role === 'admin';
+
+  let empleadoId: string | undefined;
+  if (!isAdmin) {
+    const { data: emp } = await supabase.from('empleados').select('id').eq('profile_id', user!.id).single();
+    empleadoId = emp?.id;
+  }
+
   const [citas, empleados, clientes, servicios] = await Promise.all([
-    getCitas({ desde: inicio, hasta: fin }),
+    getCitas({ desde: inicio, hasta: fin, ...(empleadoId ? { empleado_id: empleadoId } : {}) }),
     getEmpleados(),
     getClientes(),
     getServicios(),

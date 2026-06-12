@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, getNegocioId } from '@/lib/auth';
 import { z } from 'zod';
 import type { Empleado, Horario } from '@/types';
@@ -14,6 +15,7 @@ const EmpleadoSchema = z.object({
   cargo: z.string().min(1, 'Cargo requerido'),
   color_calendario: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color inválido'),
   activo: z.boolean(),
+  password: z.string().min(6, 'Mínimo 6 caracteres'),
 });
 
 export async function getEmpleados(): Promise<Empleado[]> {
@@ -52,23 +54,54 @@ type EmpleadoInput = {
   cargo: string;
   color_calendario: string;
   activo: boolean;
+  password?: string;
 };
 
 export async function createEmpleado(input: EmpleadoInput) {
   const result = EmpleadoSchema.safeParse(input);
   if (!result.success) return { error: result.error.issues[0].message };
 
-  const supabase = await createClient();
+  await requireAdmin();
   const negocioId = await getNegocioId();
+  const admin = createAdminClient();
+
+  const { data: authData, error: authError } = await admin.auth.admin.createUser({
+    email: result.data.email,
+    password: result.data.password,
+    email_confirm: true,
+  });
+  if (authError) return { error: authError.message };
+
+  await admin.from('profiles').upsert({
+    id: authData.user.id,
+    email: result.data.email,
+    nombre: result.data.nombre,
+    apellido: result.data.apellido,
+    role: 'empleado',
+    activo: true,
+    negocio_id: negocioId,
+  });
+
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from('empleados')
-    .insert({ ...result.data, negocio_id: negocioId })
+    .insert({
+      nombre: result.data.nombre,
+      apellido: result.data.apellido,
+      email: result.data.email,
+      telefono: result.data.telefono,
+      cargo: result.data.cargo,
+      color_calendario: result.data.color_calendario,
+      activo: result.data.activo,
+      negocio_id: negocioId,
+      profile_id: authData.user.id,
+    })
     .select()
     .single();
 
   if (error) {
-    if (error.code === '23505') return { error: 'Email ya registrado' };
-    return { error: error.message };
+    await admin.auth.admin.deleteUser(authData.user.id);
+    return { error: 'Error al crear empleado' };
   }
 
   revalidatePath('/empleados');
