@@ -95,15 +95,19 @@ export function UsuariosClient({ usuarios: initialUsuarios }: Props) {
         <CardContent className="p-0">
           <div className="divide-y divide-border">
             {usuarios.map((u) => (
-              <div key={u.id} className="flex flex-wrap items-center gap-3 px-6 py-4">
-                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary flex-shrink-0">
-                  {u.nombre[0]}{u.apellido[0]}
+              <div key={u.id} className="px-4 py-3 sm:px-6 sm:py-4 space-y-2">
+                {/* Top row: avatar + name */}
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary flex-shrink-0">
+                    {u.nombre[0]}{u.apellido[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{u.nombre} {u.apellido}</p>
+                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{u.nombre} {u.apellido}</p>
-                  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Actions row */}
+                <div className="flex items-center gap-2 flex-wrap pl-12">
                   <Select
                     value={u.role}
                     onValueChange={(v) => handleRol(u.id, v as UserRole)}
@@ -214,7 +218,7 @@ export function UsuariosClient({ usuarios: initialUsuarios }: Props) {
             <DialogTitle>Nuevo usuario</DialogTitle>
           </DialogHeader>
           <form action={formAction} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Nombre *</Label>
                 <Input name="nombre" className="h-9" required />

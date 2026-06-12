@@ -23,6 +23,7 @@ const navItems = [
   { href: '/ventas', label: 'Ventas', icon: ShoppingCart, roles: ['admin', 'empleado'] },
   { href: '/creditos', label: 'Créditos', icon: CreditCard, roles: ['admin', 'empleado'] },
   { href: '/reportes', label: 'Reportes', icon: BarChart3, roles: ['admin'] },
+  { href: '/usuarios', label: 'Usuarios', icon: Users, roles: ['admin'] },
   { href: '/configuracion', label: 'Configuración', icon: Settings, roles: ['admin'] },
 ];
 
