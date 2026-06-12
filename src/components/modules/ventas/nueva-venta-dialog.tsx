@@ -224,7 +224,7 @@ export function NuevaVentaDialog({ open, onClose, onCreated, empleados, clientes
         {/* Header: empleado + cliente */}
         <DialogHeader className="px-4 pt-4 pb-3 border-b shrink-0">
           <DialogTitle className="text-base mb-2">Nueva Venta</DialogTitle>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {isEmpleado ? (
               <div className="h-8 px-3 flex items-center rounded-md border bg-muted text-sm text-muted-foreground">
                 {empleadoNombre ? `${empleadoNombre.nombre} ${empleadoNombre.apellido}` : 'Sin empleado asignado'}

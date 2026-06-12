@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { getNegocioId } from '@/lib/auth';
+import { requireAdmin, getNegocioId } from '@/lib/auth';
 import { z } from 'zod';
 import type { Servicio } from '@/types';
 
@@ -62,6 +62,7 @@ export async function createServicio(input: ServicioInput) {
 }
 
 export async function updateServicio(id: string, input: ServicioInput) {
+  await requireAdmin();
   const result = ServicioSchema.safeParse(input);
   if (!result.success) return { error: result.error.issues[0].message };
 
@@ -80,6 +81,7 @@ export async function updateServicio(id: string, input: ServicioInput) {
 }
 
 export async function deleteServicio(id: string) {
+  await requireAdmin();
   const supabase = await createClient();
   // Soft delete — preserves FK integrity with citas históricas
   const { error } = await supabase.from('servicios').update({ activo: false }).eq('id', id);

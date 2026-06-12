@@ -95,7 +95,7 @@ export function UsuariosClient({ usuarios: initialUsuarios }: Props) {
         <CardContent className="p-0">
           <div className="divide-y divide-border">
             {usuarios.map((u) => (
-              <div key={u.id} className="flex items-center gap-4 px-6 py-4">
+              <div key={u.id} className="flex flex-wrap items-center gap-3 px-6 py-4">
                 <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary flex-shrink-0">
                   {u.nombre[0]}{u.apellido[0]}
                 </div>
@@ -103,7 +103,7 @@ export function UsuariosClient({ usuarios: initialUsuarios }: Props) {
                   <p className="text-sm font-medium truncate">{u.nombre} {u.apellido}</p>
                   <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <Select
                     value={u.role}
                     onValueChange={(v) => handleRol(u.id, v as UserRole)}

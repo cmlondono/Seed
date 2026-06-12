@@ -17,7 +17,10 @@ export default async function DashboardPage() {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase.from('profiles').select('role, negocio_id').eq('id', user!.id).single();
+  const userId = user?.id;
+  const { data: profile } = userId
+    ? await supabase.from('profiles').select('role, negocio_id').eq('id', userId).single()
+    : { data: null };
   const isAdmin = profile?.role === 'admin';
 
   const { data: negocio } = profile?.negocio_id
@@ -25,8 +28,8 @@ export default async function DashboardPage() {
     : { data: null };
 
   let empleadoId: string | undefined;
-  if (!isAdmin) {
-    const { data: emp } = await supabase.from('empleados').select('id').eq('profile_id', user!.id).single();
+  if (!isAdmin && userId) {
+    const { data: emp } = await supabase.from('empleados').select('id').eq('profile_id', userId).single();
     empleadoId = emp?.id;
   }
 

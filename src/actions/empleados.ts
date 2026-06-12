@@ -109,6 +109,7 @@ export async function createEmpleado(input: EmpleadoInput) {
 }
 
 export async function updateEmpleado(id: string, input: EmpleadoInput) {
+  await requireAdmin();
   const result = EmpleadoSchema.safeParse(input);
   if (!result.success) return { error: result.error.issues[0].message };
 
@@ -137,6 +138,7 @@ export async function deleteEmpleado(id: string) {
 }
 
 export async function updateServiciosEmpleado(empleadoId: string, servicioIds: string[]) {
+  await requireAdmin();
   const supabase = await createClient();
 
   await supabase.from('empleado_servicios').delete().eq('empleado_id', empleadoId);
@@ -153,6 +155,7 @@ export async function updateServiciosEmpleado(empleadoId: string, servicioIds: s
 }
 
 export async function updateHorariosEmpleado(empleadoId: string, horarios: Omit<Horario, 'id' | 'created_at' | 'updated_at'>[]) {
+  await requireAdmin();
   const supabase = await createClient();
   const negocioId = await getNegocioId();
 

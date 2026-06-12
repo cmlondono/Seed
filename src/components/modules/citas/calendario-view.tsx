@@ -46,6 +46,28 @@ interface Props {
   servicios: Servicio[];
 }
 
+function EmployeeColorStyles({ empleados }: { empleados: Empleado[] }) {
+  useEffect(() => {
+    const css = empleados
+      .filter(e => e.activo && e.color_calendario)
+      .map(emp => {
+        const c = emp.color_calendario;
+        const cLight = hexWithAlpha(c, 0.15);
+        return `.sx__calendar-wrapper{--sx-color-${emp.id}:${c};--sx-color-${emp.id}-container:${cLight};--sx-color-on-${emp.id}-container:${c};}`;
+      })
+      .join('');
+    let el = document.getElementById('sx-employee-colors');
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'sx-employee-colors';
+      document.head.appendChild(el);
+    }
+    el.textContent = css;
+    return () => { document.getElementById('sx-employee-colors')?.remove(); };
+  }, [empleados]);
+  return null;
+}
+
 export function CalendarioView({ citas: initialCitas, empleados, clientes, servicios }: Props) {
   const [citas, setCitas] = useState<Cita[]>(initialCitas);
   const [selectedCita, setSelectedCita] = useState<Cita | null>(null);
@@ -133,14 +155,7 @@ export function CalendarioView({ citas: initialCitas, empleados, clientes, servi
         ))}
       </div>
 
-      {/* CSS variables para colores de empleados — schedule-x los resuelve como --sx-color-{colorName}-container */}
-      <style dangerouslySetInnerHTML={{
-        __html: empleados.filter(e => e.activo && e.color_calendario).map(emp => {
-          const c = emp.color_calendario;
-          const cLight = hexWithAlpha(c, 0.15);
-          return `.sx__calendar-wrapper{--sx-color-${emp.id}:${c};--sx-color-${emp.id}-container:${cLight};--sx-color-on-${emp.id}-container:${c};}`;
-        }).join('')
-      }} />
+      <EmployeeColorStyles empleados={empleados} />
 
       <div className="sx-wrapper rounded-xl overflow-hidden border border-border shadow-sm">
         <ScheduleXCalendar calendarApp={calendar} />
