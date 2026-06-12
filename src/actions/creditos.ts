@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getNegocioId } from '@/lib/auth';
 import type { Credito, CuotaCredito } from '@/types';
 import { addMonths, format } from 'date-fns';
 
@@ -37,6 +38,7 @@ export interface CreateCreditoInput {
 
 export async function createCredito(input: CreateCreditoInput): Promise<{ id?: string; error?: string }> {
   const supabase = await createClient();
+  const negocioId = await getNegocioId();
 
   const montoCuota = parseFloat((input.total_credito / input.numero_cuotas).toFixed(2));
   const diferencia = parseFloat((input.total_credito - montoCuota * input.numero_cuotas).toFixed(2));
@@ -52,6 +54,7 @@ export async function createCredito(input: CreateCreditoInput): Promise<{ id?: s
       numero_cuotas: input.numero_cuotas,
       estado: 'activo',
       notas: input.notas || null,
+      negocio_id: negocioId,
     })
     .select('id')
     .single();
@@ -65,6 +68,7 @@ export async function createCredito(input: CreateCreditoInput): Promise<{ id?: s
     fecha_vencimiento: format(addMonths(new Date(input.fecha_primera_cuota), i), 'yyyy-MM-dd'),
     estado: 'pendiente' as const,
     email_enviado: false,
+    negocio_id: negocioId,
   }));
 
   const { error: cuotasError } = await supabase.from('cuotas_credito').insert(cuotas);

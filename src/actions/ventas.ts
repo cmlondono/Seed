@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getNegocioId } from '@/lib/auth';
 import { z } from 'zod';
 import { format, startOfMonth } from 'date-fns';
 import type { Venta, VentaFormData } from '@/types';
@@ -109,6 +110,7 @@ export async function createVenta(ventaData: VentaFormData) {
   const total = totalConDescuento + impuesto;
 
   const { data: user } = await supabase.auth.getUser();
+  const negocioId = await getNegocioId();
 
   const { data: venta, error: ventaError } = await supabase
     .from('ventas')
@@ -122,6 +124,7 @@ export async function createVenta(ventaData: VentaFormData) {
       total,
       estado: 'completada',
       created_by: user.user?.id,
+      negocio_id: negocioId,
     })
     .select()
     .single();
@@ -148,6 +151,7 @@ export async function createVenta(ventaData: VentaFormData) {
     precio_unitario: d.precio_unitario,
     descuento: d.descuento,
     subtotal: d.precio_unitario * d.cantidad - d.descuento,
+    negocio_id: negocioId,
   }));
 
   const { error: detallesError } = await supabase.from('detalle_ventas').insert(detallesConVenta);

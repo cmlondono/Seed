@@ -63,3 +63,63 @@ export async function getUser() {
 
   return profile;
 }
+
+export async function register(prevState: unknown, formData: FormData) {
+  const nombre = (formData.get('nombre') as string)?.trim();
+  const apellido = (formData.get('apellido') as string)?.trim();
+  const email = (formData.get('email') as string)?.trim();
+  const password = formData.get('password') as string;
+  const nombre_negocio = (formData.get('nombre_negocio') as string)?.trim();
+
+  if (!nombre || !apellido || !email || !password || !nombre_negocio) {
+    return { error: 'Todos los campos son requeridos' };
+  }
+  if (password.length < 6) return { error: 'Contraseña mínimo 6 caracteres' };
+
+  const { createAdminClient } = await import('@/lib/supabase/admin');
+  const admin = createAdminClient();
+
+  // Create auth user
+  const { data: authData, error: authError } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (authError) return { error: authError.message };
+
+  // Create negocio
+  const { data: negocio, error: negocioError } = await admin
+    .from('negocios')
+    .insert({ nombre: nombre_negocio })
+    .select('id')
+    .single();
+
+  if (negocioError) {
+    await admin.auth.admin.deleteUser(authData.user.id);
+    return { error: 'Error al crear negocio' };
+  }
+
+  // Create profile
+  const { error: profileError } = await admin.from('profiles').insert({
+    id: authData.user.id,
+    email,
+    nombre,
+    apellido,
+    role: 'admin',
+    activo: true,
+    negocio_id: negocio.id,
+  });
+
+  if (profileError) {
+    await admin.auth.admin.deleteUser(authData.user.id);
+    await admin.from('negocios').delete().eq('id', negocio.id);
+    return { error: 'Error al crear perfil' };
+  }
+
+  // Sign in the new user
+  const supabase = await createClient();
+  await supabase.auth.signInWithPassword({ email, password });
+
+  revalidatePath('/', 'layout');
+  redirect('/dashboard');
+}

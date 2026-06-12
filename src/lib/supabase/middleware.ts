@@ -28,10 +28,11 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/reset-password');
+  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/reset-password') || pathname.startsWith('/register');
+  const isOnboarding = pathname.startsWith('/onboarding');
   const isPublicRoute = pathname.startsWith('/reservas');
 
-  if (!user && !isAuthRoute && !isPublicRoute) {
+  if (!user && !isAuthRoute && !isPublicRoute && !isOnboarding) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

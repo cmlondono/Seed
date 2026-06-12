@@ -27,7 +27,10 @@
       "Bash(Remove-Item -Recurse -Force \"src\\\\__tests__\")",
       "Bash(Remove-Item -Recurse -Force \"e2e\")",
       "Bash(Remove-Item -Force \"vitest.config.ts\")",
-      "Bash(Remove-Item -Force \"playwright.config.ts\")"
+      "Bash(Remove-Item -Force \"playwright.config.ts\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"dirs created\")",
+      "PowerShell(New-Item *)"
     ]
   }
 }

@@ -17,10 +17,23 @@ export type EstadoVenta = 'pendiente' | 'completada' | 'cancelada' | 'reembolsad
 export type TipoDetalleVenta = 'producto' | 'servicio';
 
 // ============================================================
+// NEGOCIO
+// ============================================================
+export interface Negocio {
+  id: string;
+  nombre: string;
+  plan: string;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================
 // PROFILE
 // ============================================================
 export interface Profile {
   id: string;
+  negocio_id?: string;
   email: string;
   nombre: string;
   apellido: string;
@@ -37,6 +50,7 @@ export interface Profile {
 // ============================================================
 export interface Servicio {
   id: string;
+  negocio_id?: string;
   nombre: string;
   descripcion?: string;
   duracion_minutos: number;
@@ -51,6 +65,7 @@ export interface Servicio {
 // ============================================================
 export interface Empleado {
   id: string;
+  negocio_id?: string;
   profile_id?: string;
   nombre: string;
   apellido: string;
@@ -104,6 +119,7 @@ export interface Bloqueo {
 // ============================================================
 export interface Cliente {
   id: string;
+  negocio_id?: string;
   nombre: string;
   apellido?: string;
   telefono?: string;
@@ -121,6 +137,7 @@ export interface Cliente {
 // ============================================================
 export interface Cita {
   id: string;
+  negocio_id?: string;
   cliente_id: string;
   empleado_id: string;
   servicio_id: string;
@@ -151,6 +168,7 @@ export interface CategoriaInventario {
 
 export interface Inventario {
   id: string;
+  negocio_id?: string;
   nombre: string;
   descripcion?: string;
   categoria_id?: string;
@@ -206,6 +224,7 @@ export interface Producto {
 // ============================================================
 export interface Venta {
   id: string;
+  negocio_id?: string;
   numero_factura: number;
   cliente_id?: string;
   empleado_id: string;
@@ -341,6 +360,7 @@ export interface DetalleVentaFormData {
 // ============================================================
 export interface Credito {
   id: string;
+  negocio_id?: string;
   venta_id: string;
   cliente_id?: string;
   empleado_id: string;

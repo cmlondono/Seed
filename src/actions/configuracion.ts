@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireAdmin } from '@/lib/auth';
+import { requireAdmin, getNegocioId } from '@/lib/auth';
 import { z } from 'zod';
 import type { Configuracion } from '@/types';
 
@@ -63,7 +63,8 @@ export async function updateConfiguracion(prevState: unknown, formData: FormData
     const { error } = await supabase.from('configuracion').update(result.data).eq('id', existing.id);
     if (error) return { error: 'Error al actualizar configuración' };
   } else {
-    const { error } = await supabase.from('configuracion').insert(result.data);
+    const negocioId = await getNegocioId();
+    const { error } = await supabase.from('configuracion').insert({ ...result.data, negocio_id: negocioId });
     if (error) return { error: 'Error al guardar configuración' };
   }
 

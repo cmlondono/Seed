@@ -65,6 +65,11 @@ export default function LoginPage() {
               'Ingresar'
             )}
           </Button>
+
+          <p className="text-center text-sm text-muted-foreground">
+            ¿No tienes cuenta?{' '}
+            <Link href="/register" className="text-primary hover:underline">Regístrate</Link>
+          </p>
         </form>
       </CardContent>
     </Card>

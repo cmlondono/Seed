@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getNegocioId } from '@/lib/auth';
 import { z } from 'zod';
 import type { Cliente } from '@/types';
 
@@ -61,9 +62,10 @@ export async function createCliente(input: ClienteInput) {
   if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
+  const negocioId = await getNegocioId();
   const { data, error } = await supabase
     .from('clientes')
-    .insert({ ...result.data, activo: true, email: result.data.email || null })
+    .insert({ ...result.data, activo: true, email: result.data.email || null, negocio_id: negocioId })
     .select()
     .single();
 

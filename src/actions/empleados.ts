@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireAdmin } from '@/lib/auth';
+import { requireAdmin, getNegocioId } from '@/lib/auth';
 import { z } from 'zod';
 import type { Empleado, Horario } from '@/types';
 
@@ -59,9 +59,10 @@ export async function createEmpleado(input: EmpleadoInput) {
   if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
+  const negocioId = await getNegocioId();
   const { data, error } = await supabase
     .from('empleados')
-    .insert(result.data)
+    .insert({ ...result.data, negocio_id: negocioId })
     .select()
     .single();
 
@@ -120,11 +121,12 @@ export async function updateServiciosEmpleado(empleadoId: string, servicioIds: s
 
 export async function updateHorariosEmpleado(empleadoId: string, horarios: Omit<Horario, 'id' | 'created_at' | 'updated_at'>[]) {
   const supabase = await createClient();
+  const negocioId = await getNegocioId();
 
   for (const horario of horarios) {
     await supabase
       .from('horarios')
-      .upsert({ ...horario, empleado_id: empleadoId }, { onConflict: 'empleado_id,dia_semana' });
+      .upsert({ ...horario, empleado_id: empleadoId, negocio_id: negocioId }, { onConflict: 'empleado_id,dia_semana' });
   }
 
   revalidatePath('/empleados');

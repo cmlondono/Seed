@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getNegocioId } from '@/lib/auth';
 import { z } from 'zod';
 import type { Cita, CalendarEvent, EstadoCita } from '@/types';
 import { calcularHoraFin } from '@/lib/utils';
@@ -91,6 +92,8 @@ export async function createCita(data: {
 
   const hora_fin = calcularHoraFin(data.hora_inicio, servicio.duracion_minutos);
 
+  const negocioId = await getNegocioId();
+
   // Check for conflicts: existing.hora_inicio < new.hora_fin AND existing.hora_fin > new.hora_inicio
   const { data: conflicts } = await supabase
     .from('citas')
@@ -115,6 +118,7 @@ export async function createCita(data: {
       precio: servicio.precio,
       estado: 'pendiente',
       created_by: user.user?.id,
+      negocio_id: negocioId,
     })
     .select(`*, cliente:clientes(*), empleado:empleados(*), servicio:servicios(*)`)
     .single();

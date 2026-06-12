@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getNegocioId } from '@/lib/auth';
 import { z } from 'zod';
 import type { Inventario, MovimientoInventario, TipoMovimiento, Producto } from '@/types';
 
@@ -64,9 +65,10 @@ export async function createInventario(input: InventarioInput) {
   if (!result.success) return { error: result.error.issues[0].message };
 
   const supabase = await createClient();
+  const negocioId = await getNegocioId();
   const { data, error } = await supabase
     .from('inventario')
-    .insert({ ...result.data, activo: true })
+    .insert({ ...result.data, activo: true, negocio_id: negocioId })
     .select('*, categoria:categorias_inventario(*)')
     .single();
 
@@ -132,6 +134,7 @@ export async function registrarMovimiento(data: {
   }
 
   const { data: user } = await supabase.auth.getUser();
+  const negocioId = await getNegocioId();
 
   const { error: moveError } = await supabase.from('movimientos_inventario').insert({
     inventario_id: data.inventario_id,
@@ -141,6 +144,7 @@ export async function registrarMovimiento(data: {
     stock_nuevo,
     motivo: data.motivo,
     created_by: user.user?.id,
+    negocio_id: negocioId,
   });
 
   if (moveError) return { error: 'Error al registrar movimiento' };
