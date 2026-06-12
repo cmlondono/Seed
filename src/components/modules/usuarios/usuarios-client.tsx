@@ -2,7 +2,7 @@
 
 import { useState, useActionState } from 'react';
 import { toast } from 'sonner';
-import { createUsuario, toggleUsuarioActivo, updateRolUsuario, deleteUsuario } from '@/actions/usuarios';
+import { createUsuario, toggleUsuarioActivo, updateRolUsuario, deleteUsuario, changeUserPasswordAdmin } from '@/actions/usuarios';
 import type { Profile, UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Plus, Trash2, UserCheck, UserX } from 'lucide-react';
+import { Loader2, Plus, Trash2, UserCheck, UserX, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props { usuarios: Profile[] }
@@ -30,6 +30,9 @@ export function UsuariosClient({ usuarios: initialUsuarios }: Props) {
   const [rolLoading, setRolLoading] = useState<string | null>(null);
   const [toggleLoading, setToggleLoading] = useState<string | null>(null);
   const [nuevoRol, setNuevoRol] = useState<UserRole>('empleado');
+  const [passwordUserId, setPasswordUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const [, formAction, isPending] = useActionState(async (prev: unknown, formData: FormData) => {
     const result = await createUsuario(prev, formData);
@@ -57,6 +60,17 @@ export function UsuariosClient({ usuarios: initialUsuarios }: Props) {
     if ('error' in result) { toast.error(result.error as string); return; }
     setUsuarios(prev => prev.map(x => x.id === id ? { ...x, role } : x));
     toast.success('Rol actualizado');
+  };
+
+  const handleChangePassword = async () => {
+    if (!passwordUserId || newPassword.length < 6) { toast.error('Mínimo 6 caracteres'); return; }
+    setPasswordLoading(true);
+    const result = await changeUserPasswordAdmin(passwordUserId, newPassword);
+    setPasswordLoading(false);
+    if ('error' in result && result.error) { toast.error(result.error as string); return; }
+    toast.success('Contraseña actualizada');
+    setPasswordUserId(null);
+    setNewPassword('');
   };
 
   const handleDelete = async (id: string) => {
@@ -124,6 +138,16 @@ export function UsuariosClient({ usuarios: initialUsuarios }: Props) {
                     }
                   </Button>
 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => { setPasswordUserId(u.id); setNewPassword(''); }}
+                    title="Cambiar contraseña"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+
                   <AlertDialog>
                     <AlertDialogTrigger className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7 text-destructive hover:text-destructive')}>
                       <Trash2 className="w-3.5 h-3.5" />
@@ -155,6 +179,34 @@ export function UsuariosClient({ usuarios: initialUsuarios }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!passwordUserId} onOpenChange={(v) => { if (!v) { setPasswordUserId(null); setNewPassword(''); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cambiar contraseña</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nueva contraseña *</Label>
+              <Input
+                type="password"
+                className="h-9"
+                placeholder="Mínimo 6 caracteres"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={6}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => { setPasswordUserId(null); setNewPassword(''); }}>Cancelar</Button>
+            <Button type="button" disabled={passwordLoading || newPassword.length < 6} onClick={handleChangePassword}>
+              {passwordLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setNuevoRol('empleado'); }}>
         <DialogContent className="sm:max-w-md">

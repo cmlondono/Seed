@@ -108,3 +108,24 @@ export async function deleteUsuario(id: string) {
   revalidatePath('/usuarios');
   return { success: true };
 }
+
+export async function changeOwnPassword(prevState: unknown, formData: FormData) {
+  const newPassword = formData.get('new_password') as string;
+  const confirmPassword = formData.get('confirm_password') as string;
+  if (!newPassword || newPassword.length < 6) return { error: 'Mínimo 6 caracteres' };
+  if (newPassword !== confirmPassword) return { error: 'Las contraseñas no coinciden' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) return { error: error.message };
+  return { success: 'Contraseña actualizada' };
+}
+
+export async function changeUserPasswordAdmin(userId: string, newPassword: string) {
+  await requireAdmin();
+  if (!newPassword || newPassword.length < 6) return { error: 'Mínimo 6 caracteres' };
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(userId, { password: newPassword });
+  if (error) return { error: error.message };
+  return { success: true };
+}

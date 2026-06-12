@@ -1,19 +1,26 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, KeyRound, Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { MobileNav } from './mobile-nav';
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink,
+  BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import { useState, useActionState } from 'react';
+import { changeOwnPassword } from '@/actions/usuarios';
+import { toast } from 'sonner';
 
 const routeLabels: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -26,6 +33,7 @@ const routeLabels: Record<string, string> = {
   creditos: 'Créditos',
   reportes: 'Reportes',
   configuracion: 'Configuración',
+  usuarios: 'Usuarios',
   nuevo: 'Nuevo',
   editar: 'Editar',
 };
@@ -34,6 +42,15 @@ export function Header() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const { profile } = useAuthStore();
+  const [openPassword, setOpenPassword] = useState(false);
+
+  const [state, formAction, isPending] = useActionState(async (prev: unknown, formData: FormData) => {
+    const result = await changeOwnPassword(prev, formData);
+    if (result.error) { toast.error(result.error); return result; }
+    toast.success(result.success as string);
+    setOpenPassword(false);
+    return result;
+  }, null);
 
   const segments = pathname.split('/').filter(Boolean);
 
@@ -51,7 +68,6 @@ export function Header() {
               const isLast = index === segments.length - 1;
               const label = routeLabels[segment] ?? segment;
               const href = '/' + segments.slice(0, index + 1).join('/');
-
               return (
                 <span key={segment} className="flex items-center gap-1.5">
                   {index > 0 && <BreadcrumbSeparator />}
@@ -83,17 +99,53 @@ export function Header() {
         </Button>
 
         {profile && (
-          <div className="flex items-center gap-2 pl-2 border-l border-border">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-medium leading-tight">{profile.nombre} {profile.apellido}</p>
-              <p className="text-[10px] text-muted-foreground capitalize leading-tight">{profile.role}</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-              <span className="text-[11px] font-bold text-primary-foreground">{initials}</span>
-            </div>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 pl-2 border-l border-border hover:opacity-80 transition-opacity">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-medium leading-tight">{profile.nombre} {profile.apellido}</p>
+                  <p className="text-[10px] text-muted-foreground capitalize leading-tight">{profile.role}</p>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                  <span className="text-[11px] font-bold text-primary-foreground">{initials}</span>
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => setOpenPassword(true)} className="gap-2 cursor-pointer">
+                <KeyRound className="w-3.5 h-3.5" />
+                Cambiar contraseña
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
+
+      <Dialog open={openPassword} onOpenChange={setOpenPassword}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cambiar contraseña</DialogTitle>
+          </DialogHeader>
+          <form action={formAction} className="space-y-3 py-1">
+            {state?.error && <p className="text-xs text-destructive">{state.error}</p>}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nueva contraseña *</Label>
+              <Input name="new_password" type="password" className="h-9" placeholder="Mínimo 6 caracteres" minLength={6} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Confirmar contraseña *</Label>
+              <Input name="confirm_password" type="password" className="h-9" placeholder="Repite la contraseña" minLength={6} required />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setOpenPassword(false)}>Cancelar</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Guardar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
