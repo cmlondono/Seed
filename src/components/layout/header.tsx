@@ -100,16 +100,14 @@ export function Header() {
 
         {profile && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 pl-2 border-l border-border hover:opacity-80 transition-opacity">
-                <div className="text-right hidden sm:block">
-                  <p className="text-xs font-medium leading-tight">{profile.nombre} {profile.apellido}</p>
-                  <p className="text-[10px] text-muted-foreground capitalize leading-tight">{profile.role}</p>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                  <span className="text-[11px] font-bold text-primary-foreground">{initials}</span>
-                </div>
-              </button>
+            <DropdownMenuTrigger className="flex items-center gap-2 pl-2 border-l border-border hover:opacity-80 transition-opacity outline-none">
+              <div className="text-right hidden sm:block">
+                <p className="text-xs font-medium leading-tight">{profile.nombre} {profile.apellido}</p>
+                <p className="text-[10px] text-muted-foreground capitalize leading-tight">{profile.role}</p>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                <span className="text-[11px] font-bold text-primary-foreground">{initials}</span>
+              </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem onClick={() => setOpenPassword(true)} className="gap-2 cursor-pointer">
